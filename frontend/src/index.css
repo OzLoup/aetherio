@@ -158,3 +158,18 @@ video::cue {
   color: #fff;
   font-family: var(--font-sans);
 }
+
+/* TV remote (Android app): always make it obvious what is focused.
+   Unlayered, so it wins over utilities like focus-visible:outline-none. */
+html[data-remote] :focus {
+  outline: 3px solid var(--primary) !important;
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+html[data-remote] a:focus img,
+html[data-remote] a:focus [class*="aspect-"] {
+  transform: scale(1.04);
+}
+html[data-remote] {
+  scroll-padding-top: 5rem;
+}

@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
         web.setFocusable(true);
         web.setFocusableInTouchMode(true);
         setContentView(web);
+        web.requestFocus();
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -149,10 +150,15 @@ public class MainActivity extends Activity {
                 || getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
     }
 
+    /** Remote's Back: the page closes an open menu/dialog first (lib/spatialNav.ts),
+     * then the previous page, then leave the app. */
     @Override
     public void onBackPressed() {
-        if (web.canGoBack()) web.goBack();
-        else super.onBackPressed();
+        web.evaluateJavascript("(window.__aetherBack ? window.__aetherBack() : false)", handled -> {
+            if ("true".equals(handled)) return;
+            if (web.canGoBack()) web.goBack();
+            else finish();
+        });
     }
 
     @Override

@@ -71,6 +71,9 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
         if (!rootRef.current?.contains(e.relatedTarget as Node)) setPaused(false);
       }}
       onKeyDown={(e) => {
+        // With a TV remote the arrows move focus (lib/spatialNav.ts); the
+        // side arrows and dots change the slide.
+        if (document.documentElement.dataset.remote !== undefined) return;
         if (e.key === "ArrowLeft") go(active - 1);
         else if (e.key === "ArrowRight") go(active + 1);
       }}

@@ -20,6 +20,8 @@ import { isDubbedFor, isMultiAudio, languageOptions, lighterOption, qualityOptio
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
 import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, setSubsPref, shiftVtt } from "@/lib/subtitles";
 import { android } from "@/lib/android";
+import { vlcAvailable } from "@/lib/vlc";
+import { VlcButton } from "@/components/streams/VlcButton";
 import { NativePlayer } from "./NativePlayer";
 import type { PlayerState } from "./Streams";
 import { t } from "@/i18n";
@@ -1130,6 +1132,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
                   {currentChoice && currentChoice !== "original" ? ` ${t("en {lang}", { lang: choiceLabel(currentChoice).toLowerCase() })}` : ""}
                 </Button>
               )}
+              {vlcAvailable() && stream.url && (
+                <VlcButton url={stream.url} size="lg" variant="outline" className="w-full [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-white" label={t("Abrir en VLC (con imagen y sonido)")} />
+              )}
               <Button
                 size="lg"
                 variant={warningFix ? "outline" : "default"}
@@ -1209,6 +1214,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
                     ? ` (${[formatFix.quality, formatFix.size].filter(Boolean).join(" · ")})`
                     : ""}
                 </Button>
+              )}
+              {vlcAvailable() && stream.url && (
+                <VlcButton url={stream.url} size="lg" variant={formatFix ? "outline" : "default"} className="w-full [&_button]:border-white/30 [&_button]:bg-transparent [&_button]:text-white" label={t("Abrir en VLC (reproduce este formato)")} />
               )}
               <Button
                 size="lg"

@@ -19,6 +19,7 @@ import { discoverHref, playerPath } from "@/lib/routes";
 import { browsableCatalogs } from "@/lib/stremio";
 import { cn } from "@/lib/utils";
 import type { PlayerState } from "./Streams";
+import { openInVlc, vlcAvailable } from "@/lib/vlc";
 import { locale, t } from "@/i18n";
 
 /** Live TV addon a profile can add in one click (static, hosted on GitHub). */
@@ -131,6 +132,13 @@ export default function Tv() {
   }, [channels, query, group, activeCountry]);
 
   function play(c: Channel) {
+    if (webCantPlay(c) && vlcAvailable()) {
+      // iPhone/iPad: VLC opens what the browser blocks (http, .ts).
+      void openInVlc(c.url).then((opened) => {
+        if (!opened) setNotice(t("Para ver {name} en el iPhone instala VLC desde el App Store y vuelve a tocar el canal.", { name: c.name }));
+      });
+      return;
+    }
     if (webCantPlay(c)) {
       setNotice(t("{name} solo se puede ver en la app de Android o de Mac: el navegador bloquea este tipo de enlace.", { name: c.name }));
       return;
@@ -362,9 +370,9 @@ function ChannelCard({ channel, onPlay }: { channel: Channel; onPlay: (c: Channe
           <TvIcon className="size-8 text-muted-foreground" />
         )}
         {appOnly && (
-          <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white" title={t("Solo en la app de Android o de Mac")}>
+          <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white" title={vlcAvailable() ? t("Se abre en VLC") : t("Solo en la app de Android o de Mac")}>
             <Smartphone className="size-3" />
-            {t("App")}
+            {vlcAvailable() ? "VLC" : t("App")}
           </span>
         )}
       </div>

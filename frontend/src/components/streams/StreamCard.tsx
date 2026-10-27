@@ -8,6 +8,7 @@ const desktop = macApp ?? android;
 import { streamLangLabel, type StreamLang } from "@/lib/languages";
 import { isMultiAudio, isPlayable, type ParsedStream } from "@/lib/streams";
 import { cn } from "@/lib/utils";
+import { openInVlc, vlcAvailable } from "@/lib/vlc";
 import { t } from "@/i18n";
 
 export function StreamCard({
@@ -26,14 +27,16 @@ export function StreamCard({
   const playable = isPlayable(s);
   const opensOutside = s.kind === "external" || s.kind === "youtube";
   const disabled = s.kind === "torrent";
+  // iPhone/iPad: any playable link can also go to VLC (MKV only plays there).
+  const vlc = vlcAvailable() && playable && Boolean(s.stream.url);
 
   return (
-    <li>
+    <li className="flex items-stretch gap-2">
       <button
         onClick={() => onSelect(s)}
         disabled={disabled}
         className={cn(
-          "flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "flex min-w-0 flex-1 items-start gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           disabled && "cursor-not-allowed opacity-50 hover:border-border",
         )}
       >
@@ -106,7 +109,7 @@ export function StreamCard({
             {s.incompatible && !desktop && (
               <Badge variant="warning" title={t("Los navegadores de iPhone/iPad no reproducen archivos MKV")}>
                 <AlertTriangle className="size-3" />
-                {t("MKV: no se reproduce en iPhone")}
+                {vlcAvailable() ? t("MKV: se abre en VLC") : t("MKV: no se reproduce en iPhone")}
               </Badge>
             )}
             {s.webRisk && !s.incompatible && !desktop && (
@@ -134,6 +137,17 @@ export function StreamCard({
           {playable ? <Play className="size-5" /> : opensOutside ? <ExternalLink className="size-5" /> : null}
         </div>
       </button>
+      {vlc && (
+        <button
+          onClick={() => void openInVlc(s.stream.url!)}
+          className="flex w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+          title={t("Abrir en VLC")}
+          aria-label={t("Abrir en VLC")}
+        >
+          <ExternalLink className="size-4" />
+          VLC
+        </button>
+      )}
     </li>
   );
 }

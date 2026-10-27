@@ -229,12 +229,15 @@ describe("iPhone/iPad (any browser: WebKit)", () => {
   const ios = { ios: true, mkv: false, ac3: true, hevc: true, nativeHls: true };
   const onIos = (title: string, url: string, i: number) => parseStream({ name: "[RD+] Torrentio\n1080p", title, url }, torrentio, 0, i, ios)!;
 
-  it("marks MKV as unplayable and ranks it after any playable file", () => {
+  it("marks MKV as browser-incompatible (it opens in VLC) and keeps it out of in-player switching", () => {
     const mkvLatino = onIos("Pelicula.1080p.Latino.mkv", "https://x/f.mkv", 0);
     const mp4English = onIos("Movie.1080p.English.mp4", "https://x/f.mp4", 1);
+    const mp4Latino = onIos("Pelicula.1080p.Latino.mp4", "https://x/g.mp4", 2);
     expect(mkvLatino.incompatible).toBe(true);
     expect(mp4English.incompatible).toBe(false);
-    expect(sortStreams([mkvLatino, mp4English], "es-419")[0].key).toBe(mp4English.key);
+    // Language first (VLC plays the MKV), then what Safari itself can play.
+    expect(sortStreams([mp4English, mkvLatino], "es-419")[0].key).toBe(mkvLatino.key);
+    expect(sortStreams([mkvLatino, mp4Latino], "es-419")[0].key).toBe(mp4Latino.key);
     expect(languageOptions([mkvLatino, mp4English].map(toAlt)).some((o) => o.alt.stream === mkvLatino.stream)).toBe(false);
   });
 

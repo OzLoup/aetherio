@@ -14,6 +14,7 @@ import { getVideoProgress, resumePoint, type ProgressContext } from "@/api/progr
 import { playerPath, progressContextFrom } from "@/lib/routes";
 import { android } from "@/lib/android";
 import { mediaSupport } from "@/lib/browser";
+import { openInVlc, vlcAvailable } from "@/lib/vlc";
 import { isDubbedFor, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
@@ -148,7 +149,7 @@ export default function Streams() {
       (!myLanguageFilter || isDubbedFor(s.languages, language)) &&
       (!quality || s.quality === quality) &&
       (!onlyCached || s.cached === true) &&
-      (showIncompatible || !s.incompatible),
+      (showIncompatible || vlcAvailable() || !s.incompatible),
   );
   const incompatibleCount = parsed.filter((s) => s.incompatible).length;
   const readyAlternative = parsed.find(
@@ -175,6 +176,12 @@ export default function Streams() {
     navigate(playerPath(type, id), { state });
   }
 
+  /** Streams Safari can't open go straight to VLC (iPhone/iPad). */
+  function start(s: ParsedStream) {
+    if (s.incompatible && vlcAvailable() && s.stream.url) void openInVlc(s.stream.url);
+    else play(s);
+  }
+
   function handleSelect(s: ParsedStream) {
     if ((s.kind === "direct" || s.kind === "hls") && s.cached === false) {
       setConfirmUncached(s);
@@ -183,7 +190,7 @@ export default function Streams() {
     } else if (s.kind === "external") {
       window.open(s.stream.externalUrl, "_blank", "noreferrer");
     } else if (s.kind === "direct" || s.kind === "hls") {
-      play(s);
+      start(s);
     }
   }
 
@@ -244,7 +251,12 @@ export default function Streams() {
             </p>
           )}
 
-          {incompatibleCount > 0 && (
+          {incompatibleCount > 0 && vlcAvailable() && (
+            <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+              {t("En iPhone los MKV se abren en VLC. Cualquier otro stream también: usa el botón VLC de su derecha (no guarda por dónde vas).")}
+            </p>
+          )}
+          {incompatibleCount > 0 && !vlcAvailable() && (
             <p className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               <span className="flex-1">
                 {showIncompatible
@@ -288,7 +300,7 @@ export default function Streams() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => confirmUncached && play(confirmUncached)}>
+            <Button variant="outline" onClick={() => confirmUncached && start(confirmUncached)}>
               {t("Pedir descarga")}
             </Button>
             {readyAlternative ? (

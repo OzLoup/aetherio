@@ -183,7 +183,7 @@ export function sortStreams(
   opts: { desktop?: boolean; maxQuality?: string } = {},
 ) {
   const rank = (s: ParsedStream) => [
-    isPlayable(s) && !s.incompatible ? 0 : 1,
+    isPlayable(s) ? 0 : 1,
     -languageScore(s, profileLanguage),
     isReady(s) ? 0 : 1,
     overMaxQuality(s, opts.maxQuality) ? 1 : 0,

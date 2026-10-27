@@ -1,0 +1,40 @@
+name: aetherio
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aetherio
+      POSTGRES_PASSWORD: aetherio
+      POSTGRES_DB: aetherio
+    ports:
+      # 5433 by default so it doesn't clash with a Postgres on 5432. Other local
+      # projects (nami, devops_platform) also bind 5433: if one is running, use
+      # `DB_PORT=5434 docker compose up -d db` and match DATABASE_URL in backend/.env.
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - aetherio_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aetherio"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://aetherio:aetherio@db:5432/aetherio
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  aetherio_db_data:

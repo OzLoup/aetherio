@@ -1,0 +1,160 @@
+/* Blossom Carousel's styles go in the lowest-priority layer, so our
+   Tailwind utilities (flex, gap…) win over its defaults. A @layer statement
+   is allowed before @import. */
+@layer blossom-carousel;
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap");
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/* Class-based dark mode: toggled by ThemeContext adding/removing `.dark` on <html>. */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.18 0.01 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 285);
+  --muted: oklch(0.96 0.005 285);
+  --muted-foreground: oklch(0.48 0.01 285);
+  --border: oklch(0.9 0.005 285);
+  --input: oklch(0.9 0.005 285);
+  --ring: oklch(0.62 0.19 292);
+
+  --primary: oklch(0.58 0.2 292);
+  --primary-foreground: oklch(0.98 0 0);
+
+  --success: oklch(0.65 0.16 152);
+  --success-foreground: oklch(0.98 0 0);
+  --warning: oklch(0.75 0.16 75);
+  --warning-foreground: oklch(0.2 0.02 75);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 285);
+
+  /* Categorical chart series — validated palette, fixed hue order (never
+     reassigned per-chart). Used only for chart identity, never for status. */
+  --series-1: #2a78d6; /* blue */
+  --series-2: #eb6834; /* orange */
+  --series-3: #1baf7a; /* aqua */
+  --series-4: #eda100; /* yellow */
+  --series-5: #e87ba4; /* magenta */
+  --series-6: #008300; /* green */
+  --series-7: #4a3aa7; /* violet */
+  --series-8: #e34948; /* red */
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.16 0.01 275);
+  --foreground: oklch(0.94 0.005 280);
+  --card: oklch(0.2 0.012 275);
+  --card-foreground: oklch(0.94 0.005 280);
+  --muted: oklch(0.24 0.012 275);
+  --muted-foreground: oklch(0.66 0.012 280);
+  --border: oklch(0.29 0.014 275);
+  --input: oklch(0.29 0.014 275);
+  --ring: oklch(0.68 0.19 292);
+
+  --primary: oklch(0.68 0.19 292);
+  --primary-foreground: oklch(0.16 0.01 275);
+
+  --success: oklch(0.72 0.17 152);
+  --success-foreground: oklch(0.14 0.02 152);
+  --warning: oklch(0.8 0.16 80);
+  --warning-foreground: oklch(0.18 0.02 80);
+  --destructive: oklch(0.68 0.2 25);
+  --destructive-foreground: oklch(0.14 0.01 25);
+
+  --popover: oklch(0.2 0.012 275);
+  --popover-foreground: oklch(0.94 0.005 280);
+
+  /* Same 8 hues, stepped for the dark surface — not a separate palette. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-brand: "Space Grotesk", var(--font-sans);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App wordmark: Space Grotesk with a violet -> blue gradient. */
+.brand-wordmark {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, var(--primary), var(--series-1));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Subtitles: soft dark box so they stay readable over bright scenes. */
+video::cue {
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-family: var(--font-sans);
+}

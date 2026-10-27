@@ -1,0 +1,52 @@
+# ---- Secrets: never commit ----
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.mobileprovision
+*-backup.sql
+*.dump
+credentials*.json
+service-account*.json
+client_secret*.json
+
+# ---- Private notes for the AI assistant ----
+CLAUDE.md
+.claude/
+
+# ---- Python ----
+backend/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- Node / builds ----
+node_modules/
+frontend/dist/
+desktop/dist/
+desktop/ui/
+*.tsbuildinfo
+.vite/
+
+# ---- Cloudflare / tooling caches ----
+.wrangler/
+.vercel/
+
+# ---- Logs ----
+*.log
+npm-debug.log*
+
+# ---- Editors / OS ----
+.DS_Store
+.vscode/
+.idea/
+*.swp

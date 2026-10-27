@@ -1,0 +1,70 @@
+# Deploy AetherIO: backend → Google Cloud Run, frontend → Cloudflare Pages,
+# database → Neon. Manual for now (workflow_dispatch); switch to `push: main`
+# once DEPLOY.md is done. Mirrors the nami setup.
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT: ${{ vars.GCP_PROJECT }}          # e.g. aetherio-123456
+  GCP_REGION: us-central1
+  SERVICE: aetherio-backend
+  IMAGE: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/aetherio/aetherio-backend
+  PAGES_PROJECT: aetherio
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tests
+        working-directory: backend
+        run: pip install -r requirements-dev.txt && pytest -q
+      - name: Build and push image
+        working-directory: backend
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+      - name: Deploy to Cloud Run (runs migrations on start)
+        run: |
+          gcloud run deploy $SERVICE \
+            --image $IMAGE:${{ github.sha }} \
+            --region $GCP_REGION --project $GCP_PROJECT --allow-unauthenticated \
+            --set-secrets DATABASE_URL=aetherio-database-url:latest,JWT_SECRET=aetherio-jwt-secret:latest,DATA_ENCRYPTION_KEY=aetherio-data-key:latest,GOOGLE_CLIENT_ID=aetherio-google-client-id:latest,GOOGLE_CLIENT_SECRET=aetherio-google-client-secret:latest \
+            --set-env-vars ENVIRONMENT=production,SESSION_HTTPS_ONLY=true,ADDON_ALLOW_PRIVATE_HOSTS=false,FRONTEND_URL=${{ vars.FRONTEND_URL }},GOOGLE_REDIRECT_URI=${{ vars.BACKEND_URL }}/auth/google/callback
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci && npx vitest run && npm run build
+        env:
+          VITE_API_BASE_URL: ${{ vars.BACKEND_URL }}
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy dist --project-name=${{ env.PAGES_PROJECT }}

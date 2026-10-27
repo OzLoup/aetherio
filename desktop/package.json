@@ -1,0 +1,75 @@
+{
+  "name": "aetherio-desktop",
+  "productName": "AetherIO",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AetherIO para macOS: la app web + un servidor de video local con ffmpeg.",
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "dev": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "build:ui": "npm --prefix ../frontend run build -- --outDir ../desktop/ui --emptyOutDir",
+    "dist": "npm run build:ui && electron-builder --mac dmg --arm64",
+    "test": "node --test src/*.test.mjs",
+    "dist:prod": "test -n \"$AETHERIO_API_URL\" || (echo \"Set AETHERIO_API_URL=https://your-backend\" && exit 1); VITE_API_BASE_URL=\"$AETHERIO_API_URL\" npm run dist"
+  },
+  "build": {
+    "appId": "com.aetherio.desktop",
+    "productName": "AetherIO",
+    "files": [
+      "src/**",
+      "ui/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**",
+      "node_modules/@ffprobe-installer/**"
+    ],
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Para encontrar tus televisores y transmitir video a ellos.",
+        "NSBonjourServices": [
+          "_googlecast._tcp"
+        ]
+      },
+      "icon": "build/icon.png"
+    },
+    "dmg": {
+      "title": "AetherIO"
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "protocols": [
+      {
+        "name": "AetherIO",
+        "schemes": [
+          "aetherio"
+        ]
+      }
+    ],
+    "afterPack": "build/sign.cjs"
+  },
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "chromecasts": "^1.10.2",
+    "dlnacasts": "^0.1.0",
+    "ffmpeg-static": "^5.3.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  }
+}

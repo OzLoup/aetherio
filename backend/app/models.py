@@ -1,0 +1,119 @@
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.crypto import EncryptedText
+from app.database import Base
+
+
+class User(Base):
+    """An account (login). Everything personal — addons, and later history,
+    library and preferences — hangs off its profiles, Netflix-style."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    profiles: Mapped[list["Profile"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", order_by="Profile.id"
+    )
+
+
+class Profile(Base):
+    """One person watching under an account. Each profile has its own addons
+    (a kids profile can skip the adult/torrent ones) and, from Phase 4 on,
+    its own library and history."""
+
+    __tablename__ = "profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(50))
+    # Avatar color key (see PROFILE_COLORS in schemas.py); the UI shows the
+    # profile's initial on that color.
+    color: Mapped[str] = mapped_column(String(20), default="series-1")
+    # Preferred content language (BCP 47, see ProfileLanguage in schemas.py).
+    # Drives which streams are shown first and the default subtitles.
+    language: Mapped[str] = mapped_column(String(10), default="es-419")
+    # Settings (see ProfileSettings in schemas.py).
+    ui_language: Mapped[str] = mapped_column(String(5), default="es")
+    subtitle_language: Mapped[str] = mapped_column(String(10), default="es-419")
+    subtitles_mode: Mapped[str] = mapped_column(String(10), default="auto")
+    max_quality: Mapped[str] = mapped_column(String(10), default="max")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="profiles")
+    addons: Mapped[list["ProfileAddon"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan", order_by="ProfileAddon.position"
+    )
+    progress: Mapped[list["WatchProgress"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
+
+
+class ProfileAddon(Base):
+    """A Stremio addon installed on a profile, identified like Stremio does:
+    by its manifest URL ("transport URL"). Configured addons (Torrentio with a
+    debrid key, etc.) encode their config in that URL, so the same addon id
+    can be installed twice with different configs — hence the uniqueness is
+    on the URL, not on the manifest id.
+
+    `manifest` is a cached copy of the raw manifest JSON, refreshed on demand,
+    so the app can build catalogs/streams without re-fetching it each time."""
+
+    __tablename__ = "profile_addons"
+    __table_args__ = (UniqueConstraint("profile_id", "url_hash", name="uq_profile_addon_url"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    # Encrypted at rest: configured addon URLs carry API keys (app/crypto.py).
+    transport_url: Mapped[str] = mapped_column(EncryptedText)
+    url_hash: Mapped[str] = mapped_column(String(64))
+    manifest: Mapped[dict] = mapped_column(JSONB)
+    # Lower = asked first / shown first (catalog rows, stream order), like
+    # Stremio's addon order.
+    position: Mapped[int] = mapped_column(default=0)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    manifest_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    profile: Mapped["Profile"] = relationship(back_populates="addons")
+
+
+class WatchProgress(Base):
+    """How far a profile got in one playable item: a movie, or one episode.
+    Powers "Continuar viendo", the history, watched marks and resuming on
+    any device (it lives here, not in the browser).
+
+    `video_id` is the Stremio video id ("tt123" for a movie, "tt123:1:2"
+    for an episode); `meta_id` the title it belongs to. Name/poster/episode
+    info are copied in so the rows can be drawn without asking addons."""
+
+    __tablename__ = "watch_progress"
+    __table_args__ = (UniqueConstraint("profile_id", "video_id", name="uq_progress_profile_video"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    meta_id: Mapped[str] = mapped_column(String(255), index=True)
+    type: Mapped[str] = mapped_column(String(30))
+    video_id: Mapped[str] = mapped_column(String(255))
+    position: Mapped[float] = mapped_column(Float, default=0)
+    duration: Mapped[float] = mapped_column(Float, default=0)
+    watched: Mapped[bool] = mapped_column(Boolean, default=False)
+    # "Quitar de Continuar viendo": hidden until it's played again.
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False)
+    name: Mapped[str] = mapped_column(String(500))
+    poster: Mapped[str | None] = mapped_column(Text, nullable=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True
+    )
+
+    profile: Mapped["Profile"] = relationship(back_populates="progress")

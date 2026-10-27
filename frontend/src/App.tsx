@@ -9,6 +9,7 @@ import { I18nProvider } from "./i18n";
 import { ThemeProvider } from "./context/ThemeContext";
 import { setAdultAllowed } from "@/lib/stremio";
 import { AddonsProvider } from "./hooks/useAddons";
+import { LibraryProvider } from "./hooks/useLibrary";
 import AuthCallback from "./pages/AuthCallback";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -25,6 +26,7 @@ const Player = lazy(() => import("./pages/Player"));
 const History = lazy(() => import("./pages/History"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Tv = lazy(() => import("./pages/Tv"));
+const Legal = lazy(() => import("./pages/Legal"));
 
 function FullPageLoader() {
   return (
@@ -50,7 +52,9 @@ function RequireProfile() {
   setAdultAllowed(Boolean(current.adult_content));
   return (
     <AddonsProvider key={`${current.id}-${current.adult_content}`}>
+      <LibraryProvider key={current.id}>
       <AppLayout />
+      </LibraryProvider>
     </AddonsProvider>
   );
 }
@@ -81,6 +85,7 @@ export default function App() {
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
               <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/legal" element={<Legal />} />
               <Route element={<RequireUser />}>
                 <Route path="/profiles" element={<ProfilePicker />} />
                 <Route element={<RequireProfile />}>

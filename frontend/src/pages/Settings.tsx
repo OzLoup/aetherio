@@ -1,10 +1,11 @@
 import { Check, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, getErrorDetail } from "@/api/client";
 import { PROFILE_COLORS, type ProfileSettings } from "@/api/types";
 import { APP_NAME } from "@/components/BrandLogo";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
+import { AvatarEditor } from "@/components/profiles/AvatarEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,6 +127,9 @@ export default function Settings() {
               {t("Guardar")}
             </Button>
           </form>
+        </Field>
+        <Field label={t("Foto de perfil")} hint={t("Opcional. Si no subes una, se muestra la inicial sobre el color.")}>
+          <AvatarEditor profile={current} />
         </Field>
         <Field label={t("Color del avatar")}>
           <div className="flex flex-wrap items-center gap-2">
@@ -286,7 +290,10 @@ export default function Settings() {
       </Section>
 
       <p className="text-center text-xs text-muted-foreground">
-        {APP_NAME} {desktop ? `· ${t("app de Mac")} v${desktop.version}` : `· ${t("versión web")}`}
+        {APP_NAME} {desktop ? `· ${t("app de Mac")} v${desktop.version}` : `· ${t("versión web")}`} ·{" "}
+        <Link to="/legal" className="underline hover:text-foreground">
+          {t("Aviso legal")}
+        </Link>
       </p>
     </div>
   );

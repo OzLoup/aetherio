@@ -8,8 +8,9 @@ Funciona como **web**, **app de macOS** y **app de Android** (TV y celular, un s
 local (ffmpeg) que reproduce lo que el navegador no puede: audio AC3/DTS, elegir la pista de
 audio de un archivo, MKV/HEVC, subtítulos internos y transmitir a la TV.
 
-> AetherIO no aloja ni distribuye contenido. Todo lo que se reproduce viene de los addons que
-> cada usuario instala bajo su propia responsabilidad.
+> AetherIO no aloja, no distribuye y **no recomienda** contenido, addons ni listas: no trae nada
+> preinstalado salvo los addons oficiales de metadatos y subtítulos. Todo lo que se reproduce viene
+> de las fuentes que cada usuario agrega bajo su propia responsabilidad (ver `/legal` en la app).
 
 ## Funciones
 
@@ -26,6 +27,10 @@ audio de un archivo, MKV/HEVC, subtítulos internos y transmitir a la TV.
 - **Reproductor**: subtítulos (OpenSubtitles y los del archivo), cambio de idioma y de calidad
   siguiendo en el mismo minuto, aviso de conexión lenta, HLS adaptativo, atajos de teclado y
   control remoto.
+- **TV en vivo**: canales de addons de TV y listas IPTV (M3U) que agrega cada perfil, con
+  búsqueda y filtros por categoría y país.
+- **Control parental**: PIN de la cuenta; el contenido +18 está apagado en cada perfil hasta
+  activarlo con el PIN, y los addons/listas +18 solo se instalan en perfiles que lo permitan.
 - **Continuar viendo, historial y vistos**, sincronizados entre dispositivos.
 - **Transmitir a la TV**: Google Cast y AirPlay desde el navegador; desde la app de Mac,
   Chromecast/Google TV y Smart TVs DLNA (el Mac adapta el video si la TV no lo soporta).

@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -39,6 +40,9 @@ public class MainActivity extends Activity {
     private WebView web;
     private final List<String> pendingScripts = new ArrayList<>();
     private boolean pageReady = false;
+    // <input type="file"> (profile photo): the WebView needs us to open the picker.
+    private static final int PICK_FILE = 42;
+    private ValueCallback<Uri[]> fileCallback;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -78,6 +82,20 @@ public class MainActivity extends Activity {
         // target="_blank" / window.open (addon configuration pages, etc.) → system browser.
         web.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                try {
+                    startActivityForResult(params.createIntent(), PICK_FILE);
+                    return true;
+                } catch (ActivityNotFoundException e) {
+                    fileCallback = null;
+                    Toast.makeText(MainActivity.this, "Este equipo no tiene una app para elegir archivos", Toast.LENGTH_LONG).show();
+                    return false;
+                }
+            }
+
+            @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
                 WebView catcher = new WebView(MainActivity.this);
                 catcher.setWebViewClient(new WebViewClient() {
@@ -104,6 +122,15 @@ public class MainActivity extends Activity {
     private boolean isOwnPage(Uri uri) {
         Uri base = Uri.parse(BuildConfig.WEB_URL);
         return base.getHost() != null && base.getHost().equals(uri.getHost());
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_FILE && fileCallback != null) {
+            fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            fileCallback = null;
+        }
     }
 
     @Override

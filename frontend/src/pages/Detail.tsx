@@ -23,6 +23,7 @@ import {
   trailerYouTubeId,
 } from "@/lib/meta";
 import { streamsPath } from "@/lib/routes";
+import { MyListButton } from "@/components/catalog/MyListButton";
 import { getMeta, type MetaDetail, type Video } from "@/lib/stremio";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -159,6 +160,7 @@ function DetailView({ meta, source, onBack }: { meta: MetaDetail; source?: strin
                   </Button>
                 </>
               )}
+              <MyListButton meta={meta} />
               {trailer && (
                 <a
                   href={`https://www.youtube.com/watch?v=${encodeURIComponent(trailer)}`}

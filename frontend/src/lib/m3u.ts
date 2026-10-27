@@ -15,7 +15,7 @@ export interface Channel {
   url: string;
   /** Headers some servers require (Referer, User-Agent). */
   headers?: Record<string, string>;
-  /** ISO country code (MX, AR…), from tvg-country or iptv-org's tvg-id ("Canal5.mx@SD"). */
+  /** ISO country code (MX, AR…), from tvg-country or a tvg-id like "Canal5.mx@SD". */
   country?: string;
   /** Pluto TV channel (its Latin American ones are tagged as US). */
   pluto: boolean;
@@ -97,7 +97,7 @@ export function parseM3u(text: string): Channel[] {
   return channels;
 }
 
-/** iptv-org's English category names, for the group chips. */
+/** Common English category names in M3U lists, for the group chips. */
 const GROUP_LABELS: Record<string, string> = {
   General: "General",
   Religious: "Religión",

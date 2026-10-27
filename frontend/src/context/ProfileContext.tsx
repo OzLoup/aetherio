@@ -21,6 +21,8 @@ interface ProfileContextValue {
   create: (input: ProfileInput & { copyAddonsFrom?: number }) => Promise<Profile>;
   update: (id: number, input: ProfileSettings) => Promise<void>;
   remove: (id: number) => Promise<void>;
+  /** Upload a cropped photo, or `null` to go back to color + initial. */
+  setAvatar: (id: number, image: Blob | null) => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
@@ -98,11 +100,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     if (currentId === id) clearSelection();
   }
 
+  async function setAvatar(id: number, image: Blob | null) {
+    const { data } = image
+      ? await api.put<Profile>(`/profiles/${id}/avatar`, image, { headers: { "Content-Type": image.type || "image/jpeg" } })
+      : await api.delete<Profile>(`/profiles/${id}/avatar`);
+    setProfiles((prev) => prev.map((p) => (p.id === id ? data : p)));
+  }
+
   const current = profiles.find((p) => p.id === currentId) ?? null;
 
   return (
     <ProfileContext.Provider
-      value={{ profiles, current, loading, select, clearSelection, create, update, remove }}
+      value={{ profiles, current, loading, select, clearSelection, create, update, remove, setAvatar }}
     >
       {children}
     </ProfileContext.Provider>

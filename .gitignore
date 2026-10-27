@@ -50,3 +50,6 @@ npm-debug.log*
 .vscode/
 .idea/
 *.swp
+
+# Personal list of addon/IPTV configs (contains API keys): local only
+MIS_CONFIGURACIONES.local.md

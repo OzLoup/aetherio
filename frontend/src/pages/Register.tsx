@@ -96,6 +96,13 @@ export default function Register() {
           </form>
 
           <GoogleLogin onError={setError} />
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            {t("Al crear tu cuenta aceptas el")}{" "}
+            <Link to="/legal" className="underline hover:text-foreground">
+              {t("Aviso legal")}
+            </Link>
+            .
+          </p>
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

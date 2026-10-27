@@ -10,6 +10,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { useProfiles } from "@/context/ProfileContext";
 import { LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { cn } from "@/lib/utils";
+import { AvatarEditor } from "./AvatarEditor";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { t } from "@/i18n";
 
@@ -22,6 +23,8 @@ interface ProfileDialogProps {
 
 export function ProfileDialog({ open, onOpenChange, profile }: ProfileDialogProps) {
   const { profiles, create, update, remove } = useProfiles();
+  // The photo uploads right away, so read it from the live list.
+  const fresh = profile ? profiles.find((p) => p.id === profile.id) : undefined;
   const [name, setName] = useState("");
   const [color, setColor] = useState<ProfileColor>("series-1");
   const [language, setLanguage] = useState<LanguageCode>("es-419");
@@ -81,7 +84,7 @@ export function ProfileDialog({ open, onOpenChange, profile }: ProfileDialogProp
 
         <form id="profile-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
-            <ProfileAvatar profile={{ name: name || "?", color }} size="md" />
+            <ProfileAvatar profile={{ name: name || "?", color, avatar_url: fresh?.avatar_url }} size="md" />
             <div className="flex flex-1 flex-col gap-1.5">
               <Label htmlFor="profile-name">{t("Nombre")}</Label>
               <Input
@@ -94,6 +97,13 @@ export function ProfileDialog({ open, onOpenChange, profile }: ProfileDialogProp
               />
             </div>
           </div>
+
+          {fresh && (
+            <div className="flex flex-col gap-1.5">
+              <Label>{t("Foto de perfil")}</Label>
+              <AvatarEditor profile={fresh} />
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label>{t("Color")}</Label>

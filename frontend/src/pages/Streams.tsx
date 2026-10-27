@@ -296,7 +296,7 @@ export default function Streams() {
           <DialogHeader>
             <DialogTitle>{t("Este stream todavía no está listo")}</DialogTitle>
             <DialogDescription>
-              {t("No está en la caché de Real-Debrid. Si lo eliges, Real-Debrid empezará a descargarlo y podrás verlo cuando termine (de minutos a horas). Los marcados con ⚡ Listo empiezan al instante.")}
+              {t("Todavía no está en la caché de tu servicio debrid. Si lo eliges, empezará a descargarlo y podrás verlo cuando termine (de minutos a horas). Los marcados con ⚡ Listo empiezan al instante.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -327,26 +327,12 @@ function NoStreamAddons() {
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-6 text-sm">
       <p className="text-base font-semibold">{t("Ningún addon de este perfil trae streams")}</p>
       <p className="text-muted-foreground">
-        {t("Para ver contenido necesitas un addon de streams, por ejemplo Torrentio o Comet configurado con tu cuenta de Real-Debrid:")}
+        {t("Instala un addon de streams pegando la URL de su manifest en")}{" "}
+        <Link to="/addons" className="text-primary underline">
+          {t("Addons → Instalar addon")}
+        </Link>
+        . {t("AetherIO no provee ni recomienda fuentes de contenido: cada usuario elige las suyas.")}
       </p>
-      <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
-        <li>
-          {t("Abre la")}{" "}
-          <a href="https://torrentio.strem.fun/configure" target="_blank" rel="noreferrer" className="text-primary underline">
-            {t("página de configuración de Torrentio")}
-          </a>
-          .
-        </li>
-        <li>{t("Elige Real-Debrid, pega tu API key y, si quieres, prioriza el idioma español.")}</li>
-        <li>{t("Copia la URL de instalación (la que termina en manifest.json).")}</li>
-        <li>
-          {t("Pégala en")}{" "}
-          <Link to="/addons" className="text-primary underline">
-            {t("Addons → Instalar addon")}
-          </Link>
-          .
-        </li>
-      </ol>
     </div>
   );
 }

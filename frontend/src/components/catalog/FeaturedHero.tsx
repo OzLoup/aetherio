@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { BlurText } from "@/components/motion/BlurText";
 import { easeOutExpo, springs } from "@/components/motion/presets";
 import { buttonVariants } from "@/components/ui/button";
+import { MyListButton } from "./MyListButton";
 import { typeLabel } from "@/lib/labels";
 import { detailPath, streamsPath } from "@/lib/routes";
 import { getCatalog, type AddonRef, type MetaPreview } from "@/lib/stremio";
@@ -130,6 +131,7 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
                 <Info />
                 {t("Más información")}
               </Link>
+              <MyListButton meta={meta} />
             </div>
           </motion.div>
         </div>

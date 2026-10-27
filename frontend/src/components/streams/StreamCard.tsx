@@ -127,7 +127,7 @@ export function StreamCard({
             {disabled && (
               <Badge>
                 <Lock className="size-3" />
-                {t("Torrent: configura el addon con Real-Debrid")}
+                {t("Torrent: este addon necesita un servicio debrid")}
               </Badge>
             )}
           </div>

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import check_production, settings
-from app.routers import addons, auth, playlists, profiles, progress
+from app.routers import addons, auth, library, playlists, profiles, progress
 
 if settings.environment == "production" and (problems := check_production(settings)):
     raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
@@ -29,9 +29,11 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(profiles.router)
+app.include_router(profiles.avatars)
 app.include_router(addons.router)
 app.include_router(progress.router)
 app.include_router(playlists.router)
+app.include_router(library.router)
 
 
 @app.get("/health")

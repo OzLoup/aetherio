@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +53,11 @@ class Profile(Base):
     # +18 addons, playlists and channels. Off by default; turning it on
     # takes the account's parental PIN.
     adult_content: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Profile photo (small square image, cropped by the app). Served publicly
+    # at /avatars/{avatar_key}; the random key changes on every upload.
+    avatar: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    avatar_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    avatar_key: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="profiles")
@@ -60,6 +65,7 @@ class Profile(Base):
         back_populates="profile", cascade="all, delete-orphan", order_by="ProfileAddon.position"
     )
     progress: Mapped[list["WatchProgress"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
+    library: Mapped[list["LibraryItem"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
     playlists: Mapped[list["ProfilePlaylist"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan", order_by="ProfilePlaylist.position"
     )
@@ -148,3 +154,22 @@ class ProfilePlaylist(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profile: Mapped["Profile"] = relationship(back_populates="playlists")
+
+
+class LibraryItem(Base):
+    """"Mi lista": titles a profile saved to watch later. Name/poster are
+    copied in so the row can be drawn without asking addons."""
+
+    __tablename__ = "library_items"
+    __table_args__ = (UniqueConstraint("profile_id", "meta_id", name="uq_library_profile_meta"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    meta_id: Mapped[str] = mapped_column(String(255))
+    type: Mapped[str] = mapped_column(String(30))
+    name: Mapped[str] = mapped_column(String(500))
+    poster: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poster_shape: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    profile: Mapped["Profile"] = relationship(back_populates="library")

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 # ---------- Auth ----------
 
@@ -123,6 +123,12 @@ class ProfileOut(BaseModel):
     subtitles_mode: str
     max_quality: str
     adult_content: bool = False
+    avatar_key: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def avatar_url(self) -> str | None:
+        return f"/avatars/{self.avatar_key}" if self.avatar_key else None
 
 
 # ---------- Addons ----------
@@ -242,3 +248,24 @@ class PlaylistOut(BaseModel):
     adult: bool
     position: int
     created_at: datetime
+
+
+# ---------- Mi lista ----------
+
+
+class LibraryItemIn(BaseModel):
+    type: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=500)
+    poster: str | None = Field(default=None, max_length=4096)
+    poster_shape: Literal["poster", "square", "landscape"] | None = None
+
+
+class LibraryItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_id: str
+    type: str
+    name: str
+    poster: str | None = None
+    poster_shape: str | None = None
+    added_at: datetime

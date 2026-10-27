@@ -39,6 +39,8 @@ export interface Profile {
   max_quality: "max" | "1080p" | "720p" | "480p";
   /** +18 addons, lists and channels (turning it on takes the PIN). */
   adult_content: boolean;
+  /** Profile photo (path on the API, e.g. /avatars/…); null = color + initial. */
+  avatar_url?: string | null;
 }
 
 export type ProfileSettings = Partial<

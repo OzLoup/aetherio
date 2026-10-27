@@ -3,20 +3,6 @@ import type { Playlist } from "@/api/types";
 import { parseM3u, type Channel } from "@/lib/m3u";
 import { hideAdult } from "@/lib/stremio";
 
-/** Ready-made lists: public, free channels collected by iptv-org. */
-export const PLAYLIST_PRESETS = [
-  {
-    name: "TV en español",
-    description: "Más de 2.000 canales en español, incluidos los de Pluto TV (novelas, cine, noticias).",
-    url: "https://iptv-org.github.io/iptv/languages/spa.m3u",
-  },
-  {
-    name: "Canales de México",
-    description: "Canales abiertos y locales de México.",
-    url: "https://iptv-org.github.io/iptv/countries/mx.m3u",
-  },
-] as const;
-
 export async function listPlaylists() {
   const { data } = await api.get<Playlist[]>("/playlists");
   return data;

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -78,3 +80,75 @@ def delete_profile(profile_id: int, user: User = Depends(get_current_user), db: 
         raise HTTPException(status_code=400, detail="La cuenta necesita al menos un perfil")
     db.delete(profile)
     db.commit()
+
+
+# ---------- Profile photo ----------
+
+MAX_AVATAR_BYTES = 300_000
+# Magic numbers of the formats the app sends (it crops to a small JPEG).
+_SIGNATURES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+}
+
+
+def _image_type(data: bytes) -> str | None:
+    for mime, sigs in _SIGNATURES.items():
+        if any(data.startswith(sig) for sig in sigs):
+            if mime == "image/webp" and data[8:12] != b"WEBP":
+                continue
+            return mime
+    return None
+
+
+@router.put("/{profile_id}/avatar", response_model=ProfileOut)
+async def upload_avatar(
+    profile_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Raw image bytes in the body (already cropped and resized by the app)."""
+    profile = _get_owned(db, user, profile_id)
+    data = await request.body()
+    if not data or len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=400, detail="La foto debe pesar menos de 300 KB")
+    mime = _image_type(data)
+    if mime is None:
+        raise HTTPException(status_code=400, detail="La foto debe ser JPG, PNG o WebP")
+    profile.avatar = data
+    profile.avatar_type = mime
+    profile.avatar_key = secrets.token_urlsafe(24)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.delete("/{profile_id}/avatar", response_model=ProfileOut)
+def delete_avatar(profile_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = _get_owned(db, user, profile_id)
+    profile.avatar = None
+    profile.avatar_type = None
+    profile.avatar_key = None
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+avatars = APIRouter(tags=["profiles"])
+
+
+@avatars.get("/avatars/{key}")
+def get_avatar(key: str, db: Session = Depends(get_db)):
+    """Public (an <img> can't send the login token), but only reachable with
+    the unguessable key; a new upload gets a new key, so it caches forever."""
+    profile = db.scalar(select(Profile).where(Profile.avatar_key == key))
+    if profile is None or not profile.avatar:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    return Response(
+        content=profile.avatar,
+        media_type=profile.avatar_type or "image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'",
+        },
+    )

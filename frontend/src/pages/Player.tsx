@@ -1166,7 +1166,7 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 p-6">
           <div className="flex max-w-md flex-col items-center gap-4 text-center">
             <Download className="size-10 text-primary" />
-            <p className="text-lg font-semibold">{t("Real-Debrid está descargando este archivo")}</p>
+            <p className="text-lg font-semibold">{t("Tu servicio debrid está descargando este archivo")}</p>
             <p className="text-sm text-white/70">
               {t("No estaba en su caché, así que ya pidió descargarlo. Puede tardar desde unos minutos hasta horas si tiene pocas fuentes. Puedes volver más tarde, o elegir ahora un stream marcado como ⚡ Listo, que empieza al instante.")}
             </p>

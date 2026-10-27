@@ -2,7 +2,7 @@ import { Loader2, Plus, Radio, Search, Smartphone, Trash2, Tv as TvIcon } from "
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { getErrorDetail } from "@/api/client";
-import { addPlaylist, listPlaylists, loadChannels, PLAYLIST_PRESETS, removePlaylist } from "@/api/playlists";
+import { addPlaylist, listPlaylists, loadChannels, removePlaylist } from "@/api/playlists";
 import type { Playlist } from "@/api/types";
 import { CatalogRow } from "@/components/catalog/CatalogRow";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,6 @@ import type { PlayerState } from "./Streams";
 import { openInVlc, vlcAvailable } from "@/lib/vlc";
 import { locale, t } from "@/i18n";
 
-/** Live TV addon a profile can add in one click (static, hosted on GitHub). */
-export const USA_TV_NEXT = "https://raw.githubusercontent.com/yowmamasita/usa-tv-next/main/manifest.json";
 const PAGE = 60;
 const LIST_KEY = "ap_tv_list";
 const COUNTRY_KEY = "ap_tv_country";
@@ -47,7 +45,7 @@ function webCantPlay(c: Channel) {
 
 export default function Tv() {
   const navigate = useNavigate();
-  const { active, addons, install } = useAddons();
+  const { active } = useAddons();
   const [playlists, setPlaylists] = useState<Playlist[] | null>(null);
   const [listId, setListId] = useState<number | null>(() => Number(localStorage.getItem(LIST_KEY)) || null);
   const [channels, setChannels] = useState<Channel[] | null>(null);
@@ -67,7 +65,6 @@ export default function Tv() {
   }
   const [limit, setLimit] = useState(PAGE);
   const [adding, setAdding] = useState(false);
-  const [installing, setInstalling] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const tvRows = active.flatMap((addon) =>
@@ -75,7 +72,6 @@ export default function Tv() {
       .filter((c) => c.type === "tv")
       .map((catalog) => ({ addon, catalog })),
   );
-  const hasUsaTv = addons.some((a) => a.transport_url === USA_TV_NEXT);
 
   useEffect(() => {
     listPlaylists()
@@ -158,17 +154,6 @@ export default function Tv() {
     navigate(playerPath("tv", `iptv:${c.id}`), { state });
   }
 
-  async function installUsaTv() {
-    setInstalling(true);
-    try {
-      await install(USA_TV_NEXT);
-    } catch (err) {
-      setNotice(getErrorDetail(err) ?? t("No se pudo instalar el addon"));
-    } finally {
-      setInstalling(false);
-    }
-  }
-
   async function deleteList(p: Playlist) {
     await removePlaylist(p.id);
     setPlaylists((prev) => (prev ?? []).filter((x) => x.id !== p.id));
@@ -185,12 +170,6 @@ export default function Tv() {
           {t("TV en vivo")}
         </h1>
         <div className="flex flex-wrap gap-2">
-          {!hasUsaTv && (
-            <Button variant="outline" onClick={installUsaTv} disabled={installing}>
-              {installing ? <Loader2 className="animate-spin" /> : <TvIcon />}
-              {t("Agregar USA TV Next")}
-            </Button>
-          )}
           <Button onClick={() => setAdding(true)}>
             <Plus />
             {t("Agregar lista")}
@@ -212,7 +191,7 @@ export default function Tv() {
           <TvIcon className="size-10 text-muted-foreground" />
           <p className="font-semibold">{t("Todavía no tienes canales")}</p>
           <p className="max-w-md text-sm text-muted-foreground">
-            {t("Agrega una lista de canales (hay listas públicas y gratuitas en español, con Pluto TV y novelas) o un addon de TV en vivo.")}
+            {t("Agrega la URL de una lista de canales (M3U) o instala un addon de TV en vivo desde Addons.")}
           </p>
           <Button onClick={() => setAdding(true)} autoFocus>
             <Plus />
@@ -221,7 +200,7 @@ export default function Tv() {
         </div>
       )}
 
-      {/* Live TV catalogs of installed addons (USA TV Next, etc.). */}
+      {/* Live TV catalogs of the profile's addons. */}
       {tvRows.map(({ addon, catalog }) => (
         <CatalogRow
           key={`${addon.id}|${catalog.id}`}
@@ -344,7 +323,6 @@ export default function Tv() {
       <AddPlaylistDialog
         open={adding}
         onOpenChange={setAdding}
-        existing={playlists ?? []}
         onAdded={(p) => {
           setPlaylists((prev) => [...(prev ?? []), p]);
           setListId(p.id);
@@ -384,12 +362,10 @@ function ChannelCard({ channel, onPlay }: { channel: Channel; onPlay: (c: Channe
 function AddPlaylistDialog({
   open,
   onOpenChange,
-  existing,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  existing: Playlist[];
   onAdded: (p: Playlist) => void;
 }) {
   const [name, setName] = useState("");
@@ -428,31 +404,10 @@ function AddPlaylistDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("Agregar lista de canales")}</DialogTitle>
-          <DialogDescription>{t("Listas IPTV en formato M3U. Los canales se reproducen directo desde su servidor.")}</DialogDescription>
+          <DialogDescription>{t("Listas IPTV en formato M3U. AetherIO no provee listas: agrega las tuyas. Los canales se reproducen directo desde su servidor.")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2">
-          {PLAYLIST_PRESETS.map((p) => {
-            const added = existing.some((e) => e.url === p.url);
-            return (
-              <button
-                key={p.url}
-                disabled={added || busy}
-                onClick={() => add(t(p.name), p.url)}
-                className="flex flex-col gap-0.5 rounded-lg border border-border p-3 text-left transition-colors hover:border-primary focus-visible:border-primary focus-visible:outline-none disabled:opacity-50"
-              >
-                <span className="font-medium">
-                  {t(p.name)} {added && <span className="text-xs text-muted-foreground">· {t("ya agregada")}</span>}
-                </span>
-                <span className="text-xs text-muted-foreground">{t(p.description)}</span>
-              </button>
-            );
-          })}
-          <p className="text-[11px] text-muted-foreground">{t("Listas públicas de iptv-org: canales gratuitos que sus dueños emiten abiertamente.")}</p>
-        </div>
-
-        <form onSubmit={submit} className="flex flex-col gap-3 border-t border-border pt-4">
-          <p className="text-sm font-medium">{t("O pega la URL de tu lista")}</p>
+        <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pl-name">{t("Nombre")}</Label>
             <Input id="pl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder={t("Mi lista")} />

@@ -1,5 +1,6 @@
 import { languageInfo, type StreamLang } from "@/lib/languages";
 import type { AddonRef, Stream } from "@/lib/stremio";
+import { GENERIC_BROWSER, type MediaSupport } from "@/lib/browser";
 
 export type Quality = "4K" | "1080p" | "720p" | "480p";
 export type PlayKind = "direct" | "hls" | "youtube" | "external" | "torrent";
@@ -26,6 +27,8 @@ export interface ParsedStream {
   audioRisk: boolean;
   /** Likely to fail in a browser (HEVC, HDR/DV, MKV, notWebReady). */
   webRisk: boolean;
+  /** Won't play in this browser at all (MKV on iPhone/iPad). */
+  incompatible: boolean;
   headline: string;
   details: string;
   filename?: string;
@@ -72,7 +75,13 @@ function kindOf(s: Stream): PlayKind | null {
   return null;
 }
 
-export function parseStream(stream: Stream, addon: AddonRef, addonIndex: number, index: number): ParsedStream | null {
+export function parseStream(
+  stream: Stream,
+  addon: AddonRef,
+  addonIndex: number,
+  index: number,
+  support: MediaSupport = GENERIC_BROWSER,
+): ParsedStream | null {
   const kind = kindOf(stream);
   if (!kind) return null;
   const name = stream.name ?? "";
@@ -96,10 +105,13 @@ export function parseStream(stream: Stream, addon: AddonRef, addonIndex: number,
   const languages = subtitleRelease && !audioMarked ? [] : detected;
   const subtitleLanguages = subtitleRelease ? detected.filter((l) => l !== "multi") : [];
   const hevc = /\bhevc\b|x265|h\.?265/i.test(text);
-  const surround = /\b(e-?ac-?3|ac-?3|ddp?\+?\s?[257]\.1|dd\+|dts(-?hd)?|truehd|atmos)\b/i.test(text);
-  const audioRisk = surround && !/\baac\b/i.test(text);
+  // Dolby (AC3/E-AC3) plays on Apple devices; DTS/TrueHD in no browser.
+  const dolby = /\b(e-?ac-?3|ac-?3|ddp?\+?\s?[257]\.1|dd\+|atmos)\b/i.test(text);
+  const dts = /\b(dts(-?hd)?|truehd)\b/i.test(text);
+  const audioRisk = !/\baac\b/i.test(text) && (dts || (dolby && !support.ac3));
   const hdr = /\bhdr\b|hdr10|\bdv\b|dolby ?vision/i.test(text);
-  const mkv = /\.mkv\b/i.test(text);
+  const mkv = /\.mkv\b/i.test(`${text}\n${stream.url ?? ""}`);
+  const incompatible = kind === "direct" && mkv && !support.mkv;
   const sizeMatch = text.match(/(\d+(?:[.,]\d+)?)\s?(GB|MB|GiB|MiB)\b/i);
 
   return {
@@ -116,7 +128,13 @@ export function parseStream(stream: Stream, addon: AddonRef, addonIndex: number,
     hevc,
     hdr,
     audioRisk,
-    webRisk: kind === "direct" && (hevc || hdr || mkv || Boolean(stream.behaviorHints?.notWebReady)),
+    webRisk:
+      kind === "direct" &&
+      (incompatible ||
+        ((hevc || hdr) && !support.hevc) ||
+        mkv ||
+        Boolean(stream.behaviorHints?.notWebReady)),
+    incompatible,
     headline: name.replace(/\s*\n\s*/g, " · ").trim() || addon.manifest.name,
     details,
     filename,
@@ -165,7 +183,7 @@ export function sortStreams(
   opts: { desktop?: boolean; maxQuality?: string } = {},
 ) {
   const rank = (s: ParsedStream) => [
-    isPlayable(s) ? 0 : 1,
+    isPlayable(s) && !s.incompatible ? 0 : 1,
     -languageScore(s, profileLanguage),
     isReady(s) ? 0 : 1,
     overMaxQuality(s, opts.maxQuality) ? 1 : 0,
@@ -185,7 +203,10 @@ export function sortStreams(
 
 /** What the player keeps about the other streams of the same title, to
  * offer switching language mid-movie. */
-export type AltStream = Pick<ParsedStream, "stream" | "languages" | "quality" | "size" | "cached" | "audioRisk" | "webRisk">;
+export type AltStream = Pick<
+  ParsedStream,
+  "stream" | "languages" | "quality" | "size" | "cached" | "audioRisk" | "webRisk" | "incompatible"
+>;
 
 export function toAlt(s: ParsedStream): AltStream {
   return {
@@ -196,6 +217,7 @@ export function toAlt(s: ParsedStream): AltStream {
     cached: s.cached,
     audioRisk: s.audioRisk,
     webRisk: s.webRisk,
+    incompatible: s.incompatible,
   };
 }
 
@@ -223,7 +245,7 @@ export interface LanguageOption {
 export function languageOptions(alts: AltStream[]): LanguageOption[] {
   const rank = (a: AltStream) => (a.audioRisk ? 2 : 0) + (isMultiAudio(a.languages) ? 1 : 0);
   const ordered = alts
-    .filter((a) => a.cached !== false)
+    .filter((a) => a.cached !== false && !a.incompatible)
     .map((a, i) => ({ a, i }))
     .sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i)
     .map(({ a }) => a);
@@ -282,7 +304,7 @@ export function qualityOptions(
   const byQuality = new Map<Quality | null, AltStream>();
   if (current) byQuality.set(current.quality, current);
   for (const a of alts) {
-    if (a.cached === false || !sameAudioKind(a, languages, profileLanguage) || byQuality.has(a.quality)) continue;
+    if (a.cached === false || a.incompatible || !sameAudioKind(a, languages, profileLanguage) || byQuality.has(a.quality)) continue;
     byQuality.set(a.quality, a);
   }
   return QUALITY_ORDER.filter((q) => byQuality.has(q)).map((q) => ({

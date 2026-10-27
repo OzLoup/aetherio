@@ -12,12 +12,15 @@ import { useProgressSaver } from "@/hooks/useProgressSaver";
 import { formatTime } from "@/lib/format";
 import { usePlayback } from "@/hooks/usePlayback";
 import { guessContentType, isMkv } from "@/lib/cast";
+import { mediaSupport } from "@/lib/browser";
 import { audioTrackLabel, embeddedSubtitleUrl, isTrackInLanguage, subtitleTrackLabel } from "@/lib/desktop";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath, streamsPath } from "@/lib/routes";
 import { isDubbedFor, isMultiAudio, languageOptions, lighterOption, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
-import { fetchSubtitleVtt, shiftVtt } from "@/lib/subtitles";
+import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, setSubsPref, shiftVtt } from "@/lib/subtitles";
+import { android } from "@/lib/android";
+import { NativePlayer } from "./NativePlayer";
 import type { PlayerState } from "./Streams";
 import { t } from "@/i18n";
 
@@ -29,7 +32,6 @@ interface Track {
   vtt: string;
 }
 
-const MAX_TRACKS = 8;
 
 interface NativeAudioTrack {
   id: string;
@@ -43,41 +45,6 @@ function choiceLabel(lang: AudioChoice) {
   return lang === "original" ? t("Original (sin doblaje marcado)") : streamLangLabel(lang);
 }
 
-// Per profile and device: once someone turns subtitles off, don't switch
-// them on by themselves next time (e.g. releases with burned-in subtitles).
-const subsPrefKey = (profileId?: number) => `ap_subs_${profileId ?? 0}`;
-
-function getSubsPref(profileId?: number): "on" | "off" | null {
-  try {
-    const v = localStorage.getItem(subsPrefKey(profileId));
-    return v === "on" || v === "off" ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function setSubsPref(profileId: number | undefined, value: "on" | "off") {
-  try {
-    localStorage.setItem(subsPrefKey(profileId), value);
-  } catch {
-    // Best-effort only.
-  }
-}
-
-/** Pick which subtitles to load: profile language first, then English. */
-function chooseSubtitles(all: Subtitle[], preferred: string[]) {
-  const rank = (s: Subtitle) => {
-    const i = preferred.indexOf(s.lang.toLowerCase());
-    if (i >= 0) return i;
-    return ["eng", "en"].includes(s.lang.toLowerCase()) ? 100 : 1000;
-  };
-  const seen = new Set<string>();
-  return all
-    .filter((s) => rank(s) < 1000 && !seen.has(s.url) && seen.add(s.url))
-    .sort((a, b) => rank(a) - rank(b))
-    .slice(0, MAX_TRACKS);
-}
-
 export default function Player() {
   const { type = "", id = "" } = useParams();
   const state = useLocation().state as PlayerState | null;
@@ -85,6 +52,8 @@ export default function Player() {
     // Reloaded the page: the chosen stream isn't kept, pick it again.
     return <Navigate to={streamsPath(type, id, "")} replace />;
   }
+  // Android app: its own player (ExoPlayer) plays any format.
+  if (android) return <NativePlayer key={state.stream.url} type={type} id={id} state={state} />;
   // Switching language swaps the stream: remount for a clean player.
   return <PlayerView key={state.stream.url} type={type} id={id} state={state} />;
 }
@@ -118,6 +87,8 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
   // Audio tracks inside the file, where the browser exposes them (Safari;
   // Chrome doesn't). Empty = not available.
   const [audioTracks, setAudioTracks] = useState<NativeAudioTrack[]>([]);
+  const profileLangRef = useRef(current?.language ?? "es-419");
+  profileLangRef.current = current?.language ?? "es-419";
   const [copied, setCopied] = useState(false);
   const hideTimer = useRef<number | undefined>(undefined);
   const { stream, title, dubbed, languages, alternatives = [], startAt } = state;
@@ -204,6 +175,8 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       !a.audioRisk &&
       (languages?.length ? a.languages.some((l) => l !== "multi" && languages.includes(l)) : !a.languages.length),
   );
+  // No picture → needs a browser-friendly file; no sound → friendly audio.
+  const warningFix = warning?.kind === "video" ? formatFix : sameLanguageFix;
   const currentChoice: AudioChoice | undefined = languages?.length
     ? languages.find((l) => l !== "multi") ?? "original"
     : "original";
@@ -237,7 +210,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       if (destroyed) return;
       // Prefer hls.js (lets us pick the quality); native HLS (iPhone) adapts
       // by itself but can't be controlled.
-      if (!Hls.isSupported()) {
+      // iPhone/iPad: always the built-in player (sturdier there than hls.js
+      // over ManagedMediaSource, and it handles the lock screen/AirPlay).
+      if (!Hls.isSupported() || (mediaSupport().ios && mediaSupport().nativeHls)) {
         if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = srcUrl;
         else setFatal(t("Este navegador no soporta streams HLS."));
         return;
@@ -440,7 +415,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       const code = video.error?.code;
       setFatal(
         code === 4
-          ? t("El navegador no puede reproducir este formato (suele pasar con MKV, HEVC o HDR).")
+          ? mediaSupport().ios
+            ? t("El iPhone no puede reproducir este formato (suele pasar con MKV). Prueba un stream MP4 o HLS.")
+            : t("El navegador no puede reproducir este formato (suele pasar con MKV, HEVC o HDR).")
           : t("No se pudo cargar el video. Puede que el enlace haya expirado o que tu debrid aún lo esté descargando."),
       );
     };
@@ -462,12 +439,17 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         return;
       }
       const decodedAudio = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
-      if (video.videoWidth === 0) {
+      // WebKit counts decoded frames: 0 after seconds of playback = black
+      // screen with sound (iOS reports a size even when it can't decode).
+      const decodedFrames = (video as HTMLVideoElement & { webkitDecodedFrameCount?: number }).webkitDecodedFrameCount;
+      if (video.videoWidth === 0 || decodedFrames === 0) {
         video.pause();
         setWarning({
           kind: "video",
           title: t("Este video no se ve en el navegador"),
-          detail: t("Hay sonido pero no imagen: el archivo probablemente está en HEVC. En la app de Android sí se verá."),
+          detail: mediaSupport().ios
+            ? t("Hay sonido pero no imagen: el iPhone no puede mostrar el video de este archivo (suele pasar con algunos HEVC o Dolby Vision). Prueba otra versión.")
+            : t("Hay sonido pero no imagen: el archivo probablemente está en HEVC. En la app de Android sí se verá."),
         });
       } else if (decodedAudio === 0 && !video.muted) {
         video.pause();
@@ -491,6 +473,20 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       if (at && (!Number.isFinite(video.duration) || at < video.duration)) video.currentTime = at;
       const list = (video as HTMLVideoElement & { audioTracks?: AudioTrackList }).audioTracks;
       if (list && list.length > 1 && !deskRef.current.active) {
+        // WebKit (iPhone, Safari) may enable EVERY track of a multi-audio
+        // MP4 and play them on top of each other. Keep exactly one: the
+        // profile's language if the file has it (Latino first for es-419).
+        const lang = profileLangRef.current;
+        const indices = Array.from({ length: list.length }, (_, i) => i);
+        const inLang = indices.filter((i) =>
+          isTrackInLanguage({ language: list[i].language, title: list[i].label } as Parameters<typeof isTrackInLanguage>[0], lang),
+        );
+        const latino = lang === "es-419" ? inLang.find((i) => /lat|419|m[eé]x/i.test(`${list[i].label} ${list[i].language}`)) : undefined;
+        const enabled = indices.filter((i) => list[i].enabled);
+        const keep = latino ?? inLang[0] ?? enabled[0] ?? 0;
+        if (enabled.length !== 1 || enabled[0] !== keep) {
+          for (const i of indices) list[i].enabled = i === keep;
+        }
         setAudioTracks(
           Array.from({ length: list.length }, (_, i) => ({
             id: list[i].id,
@@ -1127,8 +1123,8 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
               <p className="text-sm text-white/70">{warning.detail}</p>
             </div>
             <div className="flex w-full flex-col gap-2">
-              {sameLanguageFix && (
-                <Button size="lg" className="w-full" autoFocus onClick={() => switchTo(sameLanguageFix)}>
+              {warningFix && (
+                <Button size="lg" className="w-full" autoFocus onClick={() => switchTo(warningFix)}>
                   <RotateCw />
                   {t("Probar otra versión")}
                   {currentChoice && currentChoice !== "original" ? ` ${t("en {lang}", { lang: choiceLabel(currentChoice).toLowerCase() })}` : ""}
@@ -1136,9 +1132,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
               )}
               <Button
                 size="lg"
-                variant={sameLanguageFix ? "outline" : "default"}
-                className={`w-full ${sameLanguageFix ? "border-white/30 text-white hover:bg-white/10" : ""}`}
-                autoFocus={!sameLanguageFix}
+                variant={warningFix ? "outline" : "default"}
+                className={`w-full ${warningFix ? "border-white/30 text-white hover:bg-white/10" : ""}`}
+                autoFocus={!warningFix}
                 onClick={() => navigate(-1)}
               >
                 <ListVideo />

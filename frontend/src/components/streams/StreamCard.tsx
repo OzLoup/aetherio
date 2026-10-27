@@ -1,6 +1,10 @@
 import { AlertTriangle, BadgeCheck, Captions, ExternalLink, HardDrive, Loader2, Lock, Play, VolumeX, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { desktop } from "@/lib/desktop";
+import { android } from "@/lib/android";
+import { desktop as macApp } from "@/lib/desktop";
+
+// Apps with their own player (Mac, Android) play any format and pick the track.
+const desktop = macApp ?? android;
 import { streamLangLabel, type StreamLang } from "@/lib/languages";
 import { isMultiAudio, isPlayable, type ParsedStream } from "@/lib/streams";
 import { cn } from "@/lib/utils";
@@ -99,7 +103,13 @@ export function StreamCard({
                 {s.size}
               </Badge>
             )}
-            {s.webRisk && !desktop && (
+            {s.incompatible && !desktop && (
+              <Badge variant="warning" title={t("Los navegadores de iPhone/iPad no reproducen archivos MKV")}>
+                <AlertTriangle className="size-3" />
+                {t("MKV: no se reproduce en iPhone")}
+              </Badge>
+            )}
+            {s.webRisk && !s.incompatible && !desktop && (
               <Badge variant="warning" title={t("HEVC, HDR o MKV: el navegador podría no reproducirlo (en la app de Android sí)")}>
                 <AlertTriangle className="size-3" />
                 {t("Puede fallar en navegador")}

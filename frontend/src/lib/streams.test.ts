@@ -224,3 +224,22 @@ describe("max quality preference", () => {
     expect(overMaxQuality({ quality: null }, "480p")).toBe(false);
   });
 });
+
+describe("iPhone/iPad (any browser: WebKit)", () => {
+  const ios = { ios: true, mkv: false, ac3: true, hevc: true, nativeHls: true };
+  const onIos = (title: string, url: string, i: number) => parseStream({ name: "[RD+] Torrentio\n1080p", title, url }, torrentio, 0, i, ios)!;
+
+  it("marks MKV as unplayable and ranks it after any playable file", () => {
+    const mkvLatino = onIos("Pelicula.1080p.Latino.mkv", "https://x/f.mkv", 0);
+    const mp4English = onIos("Movie.1080p.English.mp4", "https://x/f.mp4", 1);
+    expect(mkvLatino.incompatible).toBe(true);
+    expect(mp4English.incompatible).toBe(false);
+    expect(sortStreams([mkvLatino, mp4English], "es-419")[0].key).toBe(mp4English.key);
+    expect(languageOptions([mkvLatino, mp4English].map(toAlt)).some((o) => o.alt.stream === mkvLatino.stream)).toBe(false);
+  });
+
+  it("plays Dolby audio and HEVC in MP4, not DTS", () => {
+    expect(onIos("Pelicula.Latino.AC3.5.1.x265.mp4", "https://x/a.mp4", 0)).toMatchObject({ audioRisk: false, webRisk: false });
+    expect(onIos("Pelicula.Latino.DTS.mp4", "https://x/b.mp4", 1).audioRisk).toBe(true);
+  });
+});

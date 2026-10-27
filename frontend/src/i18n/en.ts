@@ -399,4 +399,18 @@ export const en: Record<string, string> = {
   "Este addon necesita configurarse antes de instalarse. Ábrelo en su página de configuración y copia la URL que te da.":
     "This add-on needs to be configured before installing. Open its configuration page and copy the URL it gives you.",
   "Google OAuth no está configurado. Define GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en el .env.": "Google sign-in isn't configured on the server.",
+  "Los streams MKV no se reproducen en el navegador de iPhone/iPad (en ningún navegador: todos usan el motor de Safari).": "MKV streams don't play in iPhone/iPad browsers (none of them: they all use Safari's engine).",
+  "Ocultamos {n} streams MKV: el navegador de iPhone/iPad no puede reproducirlos. Sirven los MP4 y los HLS.": "We hid {n} MKV streams: iPhone/iPad browsers can't play them. MP4 and HLS work.",
+  "Ocultar": "Hide",
+  "Mostrar igual": "Show anyway",
+  "Los navegadores de iPhone/iPad no reproducen archivos MKV": "iPhone/iPad browsers don't play MKV files",
+  "MKV: no se reproduce en iPhone": "MKV: won't play on iPhone",
+  "El iPhone no puede reproducir este formato (suele pasar con MKV). Prueba un stream MP4 o HLS.": "The iPhone can't play this format (common with MKV). Try an MP4 or HLS stream.",
+  "Apple TV, TVs con AirPlay y Roku compatibles:": "Apple TV, AirPlay TVs and compatible Roku:",
+  "desde el iPhone solo se puede transmitir por AirPlay.": "from an iPhone you can only cast with AirPlay.",
+  "Chromecast no funciona desde los navegadores del iPhone. Usa la app en una computadora con Chrome o Edge.": "Chromecast doesn't work from iPhone browsers. Use the app on a computer with Chrome or Edge.",
+  "Hay sonido pero no imagen: el iPhone no puede mostrar el video de este archivo (suele pasar con algunos HEVC o Dolby Vision). Prueba otra versión.": "There's sound but no picture: the iPhone can't show this file's video (common with some HEVC or Dolby Vision files). Try another version.",
+  "Abrir el reproductor de nuevo": "Open the player again",
+  "Tu debrid todavía está descargando este archivo. Vuelve a intentarlo en unos minutos o elige otro stream.": "Your debrid is still downloading this file. Try again in a few minutes or pick another stream.",
+  "No se pudo reproducir este stream.": "This stream couldn't be played.",
 };

@@ -5,7 +5,11 @@ import { API_BASE_URL, api } from "@/api/client";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/AuthContext";
+import { android } from "@/lib/android";
 import { desktop } from "@/lib/desktop";
+
+// Apps (Mac, Android) log in through the system browser and come back by aetherio://.
+const shell = desktop ?? android;
 import { GoogleIcon } from "./GoogleIcon";
 import { t } from "@/i18n";
 
@@ -31,8 +35,8 @@ export function GoogleLogin({ onError }: { onError: (message: string) => void })
   }, []);
 
   useEffect(() => {
-    if (!desktop) return;
-    return desktop.onAuth(async ({ token, error }) => {
+    if (!shell) return;
+    return shell.onAuth(async ({ token, error }) => {
       setWaiting(false);
       if (token) {
         await loginWithToken(token);
@@ -45,7 +49,7 @@ export function GoogleLogin({ onError }: { onError: (message: string) => void })
 
   if (!enabled) return null;
 
-  const href = `${API_BASE_URL}/auth/google/login?client=${desktop ? "desktop" : "web"}`;
+  const href = `${API_BASE_URL}/auth/google/login?client=${shell ? "desktop" : "web"}`;
   const button = buttonVariants({ variant: "outline", className: "w-full" });
 
   return (
@@ -55,13 +59,13 @@ export function GoogleLogin({ onError }: { onError: (message: string) => void })
         <span className="text-xs text-muted-foreground">o</span>
         <Separator className="flex-1" />
       </div>
-      {desktop ? (
+      {shell ? (
         <button
           type="button"
           className={button}
           onClick={() => {
             setWaiting(true);
-            desktop!.openExternal(href);
+            shell!.openExternal(href);
           }}
         >
           {waiting ? <Loader2 className="size-4 animate-spin" /> : <GoogleIcon className="size-4" />}

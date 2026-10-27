@@ -1,3 +1,4 @@
+import { mediaSupport } from "@/lib/browser";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { castDiagnostics, guessContentType, loadCastSdk } from "@/lib/cast";
 import { desktop, type CastDevice, type DesktopCastMedia } from "@/lib/desktop";
@@ -99,6 +100,13 @@ export function useCasting(
 
     // AirPlay (Safari): the picker exists only there.
     if (typeof video.webkitShowPlaybackTargetPicker === "function") {
+      // iPhone/iPad: AirPlay is the only way out of any iOS browser, and the
+      // "available" event often never fires in Edge/Chrome. Always offer the
+      // system picker (it says so itself when there's nothing nearby).
+      if (mediaSupport().ios) {
+        setKind("airplay");
+        return;
+      }
       const onAvail = (e: Event) => {
         if ((e as Event & { availability?: string }).availability === "available") setKind((k) => k ?? "airplay");
       };

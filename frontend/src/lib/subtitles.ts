@@ -1,3 +1,4 @@
+import type { Subtitle } from "@/lib/stremio";
 /** Turn an SRT (or VTT) file into a WebVTT blob URL for a <track>.
  * Decodes as UTF-8 and falls back to Windows-1252, the usual encoding of
  * older Spanish subtitles (otherwise "acción" shows up as "acci�n"). */
@@ -81,3 +82,41 @@ export function shiftVtt(vtt: string, delta: number): string {
   }
   return out.join("\n\n").trimEnd() + "\n";
 }
+
+const MAX_TRACKS = 8;
+
+// Per profile and device: once someone turns subtitles off, don't switch
+// them on by themselves next time (e.g. releases with burned-in subtitles).
+const subsPrefKey = (profileId?: number) => `ap_subs_${profileId ?? 0}`;
+
+export function getSubsPref(profileId?: number): "on" | "off" | null {
+  try {
+    const v = localStorage.getItem(subsPrefKey(profileId));
+    return v === "on" || v === "off" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSubsPref(profileId: number | undefined, value: "on" | "off") {
+  try {
+    localStorage.setItem(subsPrefKey(profileId), value);
+  } catch {
+    // Best-effort only.
+  }
+}
+
+/** Pick which subtitles to load: profile language first, then English. */
+export function chooseSubtitles(all: Subtitle[], preferred: string[]) {
+  const rank = (s: Subtitle) => {
+    const i = preferred.indexOf(s.lang.toLowerCase());
+    if (i >= 0) return i;
+    return ["eng", "en"].includes(s.lang.toLowerCase()) ? 100 : 1000;
+  };
+  const seen = new Set<string>();
+  return all
+    .filter((s) => rank(s) < 1000 && !seen.has(s.url) && seen.add(s.url))
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, MAX_TRACKS);
+}
+

@@ -4,7 +4,7 @@ Reproductor compatible con los **addons de Stremio**, pensado para público hisp
 Instalas un addon pegando la URL de su `manifest.json` y AetherIO muestra sus catálogos,
 fichas y streams, prioriza el **español latino** y recuerda por dónde vas en cada dispositivo.
 
-Funciona como **web** y como **app de macOS**. La app de Mac agrega un servidor de video
+Funciona como **web**, **app de macOS** y **app de Android** (TV y celular, un solo APK). La app de Mac agrega un servidor de video
 local (ffmpeg) que reproduce lo que el navegador no puede: audio AC3/DTS, elegir la pista de
 audio de un archivo, MKV/HEVC, subtítulos internos y transmitir a la TV.
 
@@ -39,6 +39,7 @@ audio de un archivo, MKV/HEVC, subtítulos internos y transmitir a la TV.
 | `backend/` | API en **Python 3.12 + FastAPI**, SQLAlchemy, Alembic, JWT propio + Google OAuth |
 | `frontend/` | Web en **React + Vite + TypeScript**, Tailwind CSS v4, Radix UI (patrón shadcn/ui), lucide-react, `motion`, Blossom Carousel |
 | `desktop/` | App de macOS: **Electron** con la misma web + servidor de video local con ffmpeg/ffprobe y transmisión (Chromecast/DLNA) |
+| `android/` | App de Android (TV y móvil): la misma web en un WebView + reproductor nativo ExoPlayer con ffmpeg (MKV, HEVC, AC3/DTS, pistas de audio) |
 | `docker-compose.yml` | PostgreSQL local (y el backend, opcional) |
 | `DEPLOY.md` | Guía de despliegue (Cloud Run + Cloudflare Pages + Neon) |
 
@@ -99,6 +100,21 @@ AETHERIO_API_URL=https://tu-backend npm run dist:prod   # apuntando a producció
   modos*.
 - Si lanzas Electron desde la terminal de VS Code, quita `ELECTRON_RUN_AS_NODE`
   (el script `dev` ya lo hace).
+
+## App de Android
+
+Un solo APK para Android TV y Android normal. Carga la web publicada y reproduce con
+ExoPlayer + ffmpeg, así que abre formatos que el navegador no puede.
+
+```bash
+cd android
+# Requiere JDK 17 y el Android SDK (platform 36). local.properties → sdk.dir=…
+./gradlew assembleRelease     # → app/build/outputs/apk/release/app-release.apk
+./gradlew assembleRelease -PwebUrl=http://192.168.1.10:5173   # apuntando a otra web
+```
+
+Firma: crea `android/keystore.properties` (storeFile, storePassword, keyAlias, keyPassword) con
+tu propia llave; sin él se usa la llave de depuración. Nunca subas la llave al repo.
 
 ## API (resumen)
 

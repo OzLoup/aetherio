@@ -58,11 +58,15 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
   return (
     <div
       className={cn(
-        "absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300",
+        "absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-10 transition-opacity duration-300",
         visible ? "opacity-100" : "pointer-events-none opacity-0",
       )}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Phones: the time goes above the bar so every button fits. */}
+      <span className="select-none text-xs tabular-nums text-white/90 sm:hidden">
+        {formatTime(currentTime)} <span className="text-white/50">/ {formatTime(duration)}</span>
+      </span>
       {/* Progress: played / buffered, with a native range on top for input. */}
       <div className="group relative flex h-5 items-center">
         <div className="absolute inset-x-0 h-1 rounded-full bg-white/20 transition-all group-hover:h-1.5">
@@ -86,7 +90,7 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
         />
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         <BarButton label={paused ? t("Reproducir") : t("Pausar")} onClick={onTogglePlay}>
           {paused ? <Play className="fill-current" /> : <Pause className="fill-current" />}
         </BarButton>
@@ -96,7 +100,8 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
         <BarButton label={t("Adelantar 10 segundos")} onClick={() => onSkip(10)}>
           <RotateCw />
         </BarButton>
-        <div className="group/vol flex items-center">
+        {/* Phones use their volume buttons (iOS ignores page volume). */}
+        <div className="group/vol hidden items-center sm:flex">
           <BarButton label={muted ? t("Activar sonido") : t("Silenciar")} onClick={onToggleMute}>
             <VolumeIcon />
           </BarButton>
@@ -111,11 +116,11 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
             aria-label={t("Volumen")}
           />
         </div>
-        <span className="ml-2 select-none text-sm tabular-nums text-white/90">
+        <span className="ml-2 hidden select-none text-sm tabular-nums text-white/90 sm:inline">
           {formatTime(currentTime)} <span className="text-white/50">/ {formatTime(duration)}</span>
         </span>
 
-        <div className="ml-auto flex items-center gap-1">{right}</div>
+        <div className="ml-auto flex items-center gap-0.5 sm:gap-1">{right}</div>
       </div>
     </div>
   );

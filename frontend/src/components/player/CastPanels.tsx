@@ -1,6 +1,7 @@
 import { Cast, Loader2, Pause, Play, RefreshCw, RotateCcw, RotateCw, Settings, Tv, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { desktop } from "@/lib/desktop";
+import { mediaSupport } from "@/lib/browser";
 import type { CastDevice } from "@/lib/desktop";
 import { Button } from "@/components/ui/button";
 import type { RemoteState } from "@/hooks/useCasting";
@@ -93,6 +94,15 @@ export function CastHelp({ onClose, diagnostics }: { onClose: () => void; diagno
       <p className="mb-3 text-white/70">
         {t("No encontramos dispositivos desde este navegador. Asegúrate de que la TV esté en la misma red Wi-Fi.")}
       </p>
+      {mediaSupport().ios ? (
+        <ul className="flex flex-col gap-2 text-white/80">
+          <li>
+            <strong>{t("Apple TV, TVs con AirPlay y Roku compatibles:")}</strong>{" "}
+            {t("desde el iPhone solo se puede transmitir por AirPlay.")}
+          </li>
+          <li>{t("Chromecast no funciona desde los navegadores del iPhone. Usa la app en una computadora con Chrome o Edge.")}</li>
+        </ul>
+      ) : (
       <ul className="flex flex-col gap-2 text-white/80">
         <li>
           <strong>{t("Chromecast / Google TV:")}</strong> {t("abre la app en")} <strong>Chrome</strong>.
@@ -107,6 +117,7 @@ export function CastHelp({ onClose, diagnostics }: { onClose: () => void; diagno
           </li>
         )}
       </ul>
+      )}
       {diagnostics && <p className="mt-3 break-words border-t border-white/10 pt-2 text-[11px] text-white/40">{diagnostics}</p>}
     </div>
   );

@@ -12,6 +12,8 @@ import { useAddons } from "@/hooks/useAddons";
 import { languageInfo } from "@/lib/languages";
 import { getVideoProgress, resumePoint, type ProgressContext } from "@/api/progress";
 import { playerPath, progressContextFrom } from "@/lib/routes";
+import { android } from "@/lib/android";
+import { mediaSupport } from "@/lib/browser";
 import { isDubbedFor, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
@@ -63,6 +65,8 @@ export default function Streams() {
   const [quality, setQuality] = useState<Quality | "">("");
   const [onlyCached, setOnlyCached] = useState(false);
   const [confirmUncached, setConfirmUncached] = useState<ParsedStream | null>(null);
+  // iPhone/iPad: MKV files can't play in any browser there, so they're hidden.
+  const [showIncompatible, setShowIncompatible] = useState(false);
 
   useEffect(() => {
     if (addonsLoading) return;
@@ -84,13 +88,13 @@ export default function Streams() {
 
   const parsed = useMemo(() => {
     const list = results.flatMap((r) =>
-      r.items.map((s, i) => parseStream(s, r.addon, sources.indexOf(r.addon), i)).filter((s): s is ParsedStream => s !== null),
+      r.items.map((s, i) => parseStream(s, r.addon, sources.indexOf(r.addon), i, mediaSupport())).filter((s): s is ParsedStream => s !== null),
     );
     const withVerified = list.map((s) => {
       const real = s.stream.url ? applied[s.stream.url] : undefined;
       return real && real.length ? { ...s, languages: real } : s;
     });
-    return sortStreams(withVerified, language, { desktop: Boolean(desktop), maxQuality: current?.max_quality });
+    return sortStreams(withVerified, language, { desktop: Boolean(desktop || android), maxQuality: current?.max_quality });
   }, [results, sources, language, applied, current?.max_quality]);
 
   const allAnswered = sources.length > 0 && sources.every((a) => results.some((r) => r.addon === a));
@@ -143,8 +147,10 @@ export default function Streams() {
     (s) =>
       (!myLanguageFilter || isDubbedFor(s.languages, language)) &&
       (!quality || s.quality === quality) &&
-      (!onlyCached || s.cached === true),
+      (!onlyCached || s.cached === true) &&
+      (showIncompatible || !s.incompatible),
   );
+  const incompatibleCount = parsed.filter((s) => s.incompatible).length;
   const readyAlternative = parsed.find(
     (s) => s.cached === true && (s.kind === "direct" || s.kind === "hls") && (!hasMyLanguage || isDubbedFor(s.languages, language)),
   );
@@ -164,7 +170,7 @@ export default function Streams() {
       // A multi-audio file may well play its original track.
       dubbed: isDubbedFor(s.languages, language) && !isMultiAudio(s.languages),
       languages: (s.stream.url && verified[s.stream.url]?.length ? verified[s.stream.url] : null) ?? s.languages,
-      alternatives: parsed.filter(isPlayable).slice(0, MAX_ALTERNATIVES).map(toAlt),
+      alternatives: parsed.filter((p) => isPlayable(p) && !p.incompatible).slice(0, MAX_ALTERNATIVES).map(toAlt),
     };
     navigate(playerPath(type, id), { state });
   }
@@ -235,6 +241,19 @@ export default function Streams() {
           {!hasMyLanguage && pending.length === 0 && parsed.length > 0 && (
             <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               {t("No encontramos streams en {lang}. Se muestran todos (los más cercanos a tu idioma primero) y los subtítulos en tu idioma se activarán solos.", { lang: langLabel.toLowerCase() })}
+            </p>
+          )}
+
+          {incompatibleCount > 0 && (
+            <p className="flex flex-wrap items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+              <span className="flex-1">
+                {showIncompatible
+                  ? t("Los streams MKV no se reproducen en el navegador de iPhone/iPad (en ningún navegador: todos usan el motor de Safari).")
+                  : t("Ocultamos {n} streams MKV: el navegador de iPhone/iPad no puede reproducirlos. Sirven los MP4 y los HLS.", { n: incompatibleCount })}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setShowIncompatible((v) => !v)}>
+                {showIncompatible ? t("Ocultar") : t("Mostrar igual")}
+              </Button>
             </p>
           )}
 

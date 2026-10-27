@@ -18,7 +18,7 @@ import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath, streamsPath } from "@/lib/routes";
 import { isDubbedFor, isMultiAudio, languageOptions, lighterOption, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
-import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, setSubsPref, shiftVtt } from "@/lib/subtitles";
+import { chooseSubtitles, fetchSubtitleVtt, FPS_SCALES, getSubsPref, getSubtitleSync, NO_SYNC, retimeVtt, saveSubtitleSync, setSubsPref, type SubtitleSync } from "@/lib/subtitles";
 import { android } from "@/lib/android";
 import { vlcAvailable } from "@/lib/vlc";
 import { VlcButton } from "@/components/streams/VlcButton";
@@ -42,6 +42,13 @@ interface NativeAudioTrack {
   enabled: boolean;
 }
 type AudioTrackList = ArrayLike<NativeAudioTrack> & { length: number };
+
+/** "+1.5 s después" / "0.5 s antes" / "sin ajuste". */
+function syncLabel(offset: number) {
+  if (!offset) return t("sin ajuste");
+  const n = Math.abs(offset).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return offset > 0 ? t("{n} s después", { n }) : t("{n} s antes", { n });
+}
 
 function choiceLabel(lang: AudioChoice) {
   return lang === "original" ? t("Original (sin doblaje marcado)") : streamLangLabel(lang);
@@ -77,6 +84,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
   const [chromeVisible, setChromeVisible] = useState(true);
   // Index into `tracks` of the subtitle being shown, -1 = off.
   const [activeTrack, setActiveTrack] = useState(-1);
+  // Subtitle timing fix (menu Subtítulos, keys G/H), remembered per video.
+  const [subSync, setSubSync] = useState<SubtitleSync>(() => getSubtitleSync(id));
+  const [syncNote, setSyncNote] = useState<string | null>(null);
   const [menu, setMenu] = useState<"subs" | "lang" | "cast" | "quality" | null>(null);
   // Audio renditions inside an HLS stream (hls.js), shown in the language menu.
   const [hlsAudioTracks, setHlsAudioTracks] = useState<{ name: string; lang?: string }[]>([]);
@@ -138,7 +148,7 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       videoMode: desk.videoMode,
       duration: desk.info?.duration ?? (playback.duration || null),
       start: playback.currentTime,
-      vtt: activeTrack >= 0 ? tracks[activeTrack]?.vtt : undefined,
+      vtt: activeTrack >= 0 && tracks[activeTrack] ? retimeVtt(tracks[activeTrack].vtt, subSync.offset, subSync.scale) : undefined,
     }),
     onStopAt: (t) => {
       seek(t);
@@ -321,11 +331,29 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
   const trackSrcs = useMemo(
     () =>
       tracks.map((t) =>
-        URL.createObjectURL(new Blob([desk.offset ? shiftVtt(t.vtt, -desk.offset) : t.vtt], { type: "text/vtt" })),
+        URL.createObjectURL(
+          new Blob([retimeVtt(t.vtt, subSync.offset - (desk.offset || 0), subSync.scale)], { type: "text/vtt" }),
+        ),
       ),
-    [tracks, desk.offset],
+    [tracks, desk.offset, subSync],
   );
   useEffect(() => () => trackSrcs.forEach((u) => URL.revokeObjectURL(u)), [trackSrcs]);
+
+  function changeSync(next: SubtitleSync) {
+    const clean = { offset: Math.round(next.offset * 100) / 100, scale: next.scale };
+    setSubSync(clean);
+    saveSubtitleSync(id, clean);
+    setSyncNote(syncLabel(clean.offset));
+  }
+  const nudgeSyncRef = useRef((delta: number) => changeSync({ ...subSync, offset: subSync.offset + delta }));
+  useEffect(() => {
+    nudgeSyncRef.current = (delta: number) => changeSync({ ...subSync, offset: subSync.offset + delta });
+  });
+  useEffect(() => {
+    if (!syncNote) return;
+    const timer = window.setTimeout(() => setSyncNote(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [syncNote]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -649,6 +677,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         seekByRef.current(-10);
       } else if (e.key === "f") {
         toggleFullscreen();
+      } else if (e.key === "g" || e.key === "h") {
+        // Like VLC: G = subtitles earlier, H = later.
+        nudgeSyncRef.current(e.key === "g" ? -0.25 : 0.25);
       } else if (e.key === "Backspace" || e.key === "BrowserBack") {
         navigate(-1);
       }
@@ -704,7 +735,7 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         onEnded={() => progressSaver.saveNow()}
       >
         {tracks.map((item, i) => (
-          <track key={`${item.id}@${desk.offset}`} kind="subtitles" label={item.label} srcLang={item.srclang} src={trackSrcs[i]} />
+          <track key={`${item.id}@${desk.offset}@${subSync.offset}@${subSync.scale}`} kind="subtitles" label={item.label} srcLang={item.srclang} src={trackSrcs[i]} />
         ))}
       </video>
 
@@ -743,6 +774,12 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
           </button>
         </div>
       ) : null}
+
+      {syncNote && (
+        <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2 rounded-full bg-black/80 px-4 py-2 text-sm">
+          {t("Subtítulos: {when}", { when: syncNote })}
+        </div>
+      )}
 
       <ControlBar
         playback={playback}
@@ -1105,6 +1142,50 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
               </span>
             </button>
           ))}
+          {activeTrack >= 0 && (
+            <div className="mt-1 flex flex-col gap-2 border-t border-white/10 px-3 py-2">
+              <p className="text-xs font-medium text-white/70">{t("Sincronización")}</p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => changeSync({ ...subSync, offset: subSync.offset - 0.5 })}
+                  className="rounded-md bg-white/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-white/20 focus-visible:bg-white/25 focus-visible:outline-none"
+                  title={t("Que aparezcan antes (tecla G)")}
+                >
+                  −0.5 s
+                </button>
+                <span className="flex-1 text-center text-xs tabular-nums">{syncLabel(subSync.offset)}</span>
+                <button
+                  onClick={() => changeSync({ ...subSync, offset: subSync.offset + 0.5 })}
+                  className="rounded-md bg-white/10 px-2.5 py-1.5 text-xs font-semibold hover:bg-white/20 focus-visible:bg-white/25 focus-visible:outline-none"
+                  title={t("Que aparezcan después (tecla H)")}
+                >
+                  +0.5 s
+                </button>
+              </div>
+              <label className="flex flex-col gap-1 text-xs text-white/70">
+                {t("Si el desfase crece con el tiempo")}
+                <select
+                  value={String(subSync.scale)}
+                  onChange={(e) => changeSync({ ...subSync, scale: Number(e.target.value) })}
+                  className="rounded-md border border-white/15 bg-black px-2 py-1.5 text-xs text-white"
+                >
+                  {FPS_SCALES.map((f) => (
+                    <option key={f.label} value={String(f.scale)}>
+                      {t(f.label)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(subSync.offset !== 0 || subSync.scale !== 1) && (
+                <button onClick={() => changeSync(NO_SYNC)} className="self-start text-xs text-white/60 underline hover:text-white">
+                  {t("Restablecer")}
+                </button>
+              )}
+              <p className="text-[11px] leading-snug text-white/45">
+                {t("Si no cuadra, prueba otro subtítulo de la lista: suelen ser de otra versión del video.")}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

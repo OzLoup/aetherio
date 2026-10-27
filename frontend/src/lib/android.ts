@@ -31,11 +31,14 @@ export interface NativePlayRequest {
   preferLatino: boolean;
   subtitles: NativeSubtitle[];
   subtitlesOn: boolean;
+  /** Show "Idioma y calidad" (other files of this title). */
+  hasVersions: boolean;
 }
 
 /** Sent by the native player: every ~15 s, on pause, and when closing. */
 export interface NativePlayerEvent {
-  type: "progress" | "closed" | "error";
+  /** versions = the user asked for another language/quality. */
+  type: "progress" | "closed" | "error" | "versions";
   positionMs: number;
   durationMs: number;
   message?: string;

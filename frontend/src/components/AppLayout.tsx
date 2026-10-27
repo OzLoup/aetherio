@@ -24,7 +24,6 @@ const NAV = [
   { to: "/", label: "Inicio", icon: Home },
   { to: "/discover", label: "Descubrir", icon: Compass },
   { to: "/tv", label: "TV en vivo", icon: Radio },
-  { to: "/history", label: "Historial", icon: History },
   { to: "/addons", label: "Addons", icon: Puzzle },
 ];
 
@@ -134,6 +133,10 @@ export function AppLayout() {
                 >
                   <Users />
                   {t("Administrar perfiles")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate("/history")}>
+                  <History />
+                  {t("Historial")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate("/settings")}>
                   <Settings />

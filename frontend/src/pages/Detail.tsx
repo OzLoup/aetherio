@@ -24,6 +24,7 @@ import {
 } from "@/lib/meta";
 import { streamsPath } from "@/lib/routes";
 import { MyListButton } from "@/components/catalog/MyListButton";
+import { RatingButtons } from "@/components/catalog/RatingButtons";
 import { getMeta, type MetaDetail, type Video } from "@/lib/stremio";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -161,6 +162,7 @@ function DetailView({ meta, source, onBack }: { meta: MetaDetail; source?: strin
                 </>
               )}
               <MyListButton meta={meta} />
+              <RatingButtons meta={meta} />
               {trailer && (
                 <a
                   href={`https://www.youtube.com/watch?v=${encodeURIComponent(trailer)}`}

@@ -9,6 +9,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -78,6 +79,8 @@ public class PlayerActivity extends Activity {
         setContentView(R.layout.activity_player);
         view = findViewById(R.id.player_view);
         TextView title = findViewById(R.id.title);
+        View topBar = findViewById(R.id.top_bar);
+        Button versions = findViewById(R.id.versions);
         hideSystemBars();
 
         JSONObject req;
@@ -88,6 +91,18 @@ public class PlayerActivity extends Activity {
             return;
         }
         title.setText(req.optString("title"));
+        // Other files of the same title (another language or quality): the
+        // page shows the list and comes back here at the same minute.
+        if (req.optBoolean("hasVersions")) {
+            versions.setVisibility(View.VISIBLE);
+            versions.setOnClickListener(v -> {
+                if (player == null) return;
+                finishedSent = true;
+                long duration = player.getDuration();
+                PlayerEvents.send("versions", player.getCurrentPosition(), duration == C.TIME_UNSET ? 0 : duration, null);
+                finish();
+            });
+        }
         preferLatino = req.optBoolean("preferLatino");
         boolean subtitlesOn = req.optBoolean("subtitlesOn");
 
@@ -179,7 +194,7 @@ public class PlayerActivity extends Activity {
         view.setShowPreviousButton(false);
         view.setControllerShowTimeoutMs(4000);
         view.setControllerVisibilityListener((PlayerView.ControllerVisibilityListener) visibility ->
-                title.setVisibility(visibility));
+                topBar.setVisibility(visibility));
 
         player.setMediaItem(item.build(), Math.max(0, req.optLong("startMs")));
         player.prepare();
@@ -228,11 +243,34 @@ public class PlayerActivity extends Activity {
                 case KeyEvent.KEYCODE_ENTER:
                     view.showController();
                     return true;
+                case KeyEvent.KEYCODE_MENU:
+                    View menuTarget = findViewById(R.id.versions);
+                    if (menuTarget.getVisibility() == View.VISIBLE) menuTarget.performClick();
+                    return true;
                 default:
                     break;
             }
         }
-        return view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event);
+        View versions = findViewById(R.id.versions);
+        boolean versionsShown = versions.getVisibility() == View.VISIBLE && view.isControllerFullyVisible();
+        if (versionsShown && versions.hasFocus()) {
+            // Keep the controls (and this bar) up while the user is on the button.
+            view.showController();
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN && event.getAction() == KeyEvent.ACTION_DOWN) {
+                View playPause = view.findViewById(androidx.media3.ui.R.id.exo_play_pause);
+                if (playPause != null && playPause.requestFocus()) return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
+        View before = getCurrentFocus();
+        boolean handled = view.dispatchKeyEvent(event);
+        // Up from the top row of the controls: on to "Idioma y calidad".
+        if (versionsShown && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP && getCurrentFocus() == before) {
+            versions.requestFocus();
+            return true;
+        }
+        return handled || super.dispatchKeyEvent(event);
     }
 
     private void report(String type) {

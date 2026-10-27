@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react";
 import { CatalogRow } from "@/components/catalog/CatalogRow";
 import { MyListRow } from "@/components/catalog/MyListRow";
+import { ForYouRow } from "@/components/catalog/ForYouRow";
 import { ContinueWatching } from "@/components/catalog/ContinueWatching";
 import { FeaturedHero } from "@/components/catalog/FeaturedHero";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
@@ -40,6 +41,9 @@ export default function Home() {
       </ScrollReveal>
       <ScrollReveal>
         <MyListRow />
+      </ScrollReveal>
+      <ScrollReveal>
+        <ForYouRow />
       </ScrollReveal>
       {rows.map(({ addon, catalog }) => (
         <ScrollReveal key={`${addon.id}|${catalog.type}|${catalog.id}`}>

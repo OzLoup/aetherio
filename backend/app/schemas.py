@@ -269,3 +269,27 @@ class LibraryItemOut(BaseModel):
     poster: str | None = None
     poster_shape: str | None = None
     added_at: datetime
+
+
+# ---------- Ratings ----------
+
+
+class RatingIn(BaseModel):
+    # -1 no me gusta, 1 me gusta, 2 me encanta.
+    rating: Literal[-1, 1, 2]
+    type: str = Field(min_length=1, max_length=30)
+    name: str = Field(min_length=1, max_length=500)
+    poster: str | None = Field(default=None, max_length=4096)
+    genres: list[str] = Field(default_factory=list, max_length=20)
+
+
+class RatingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_id: str
+    type: str
+    name: str
+    poster: str | None = None
+    genres: list[str] = []
+    rating: int
+    updated_at: datetime

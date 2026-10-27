@@ -13,16 +13,40 @@
         app:show_buffering="always"
         app:show_subtitle_button="true" />
 
-    <TextView
-        android:id="@+id/title"
+    <!-- Top bar, shown together with the controls: title + language/quality. -->
+    <LinearLayout
+        android:id="@+id/top_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:background="#99000000"
-        android:ellipsize="end"
-        android:maxLines="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingHorizontal="24dp"
-        android:paddingVertical="14dp"
-        android:textColor="@android:color/white"
-        android:textSize="18sp" />
+        android:paddingVertical="8dp">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@android:color/white"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/versions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/top_button"
+            android:focusable="true"
+            android:minHeight="40dp"
+            android:paddingHorizontal="16dp"
+            android:text="@string/versions"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:visibility="gone" />
+    </LinearLayout>
 </FrameLayout>

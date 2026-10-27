@@ -63,7 +63,14 @@ const TIMING = /^(\s*)((?:\d+:)?\d{1,2}:\d{2}\.\d{1,3})\s+-->\s+((?:\d+:)?\d{1,2
  * before 0 are dropped. Used when the desktop app restarts the video at a
  * seek point: the player's clock restarts at 0 there. */
 export function shiftVtt(vtt: string, delta: number): string {
-  if (!delta) return vtt;
+  return retimeVtt(vtt, delta, 1);
+}
+
+/** Every cue at `time × scale + offset` (seconds). `scale` fixes subtitles
+ * made for another frame rate (the gap grows as the video goes on);
+ * `offset` a constant lead/lag. Cues that end before 0 are dropped. */
+export function retimeVtt(vtt: string, offset: number, scale = 1): string {
+  if (!offset && scale === 1) return vtt;
   const [header, ...blocks] = vtt.replace(/\r\n?/g, "\n").split(/\n\n+/);
   const out: string[] = [header];
   for (const block of blocks) {
@@ -74,13 +81,50 @@ export function shiftVtt(vtt: string, delta: number): string {
       continue;
     }
     const [, indent, start, end, settings] = lines[i].match(TIMING)!;
-    const s = parseTime(start) + delta;
-    const e = parseTime(end) + delta;
+    const s = parseTime(start) * scale + offset;
+    const e = parseTime(end) * scale + offset;
     if (e <= 0) continue;
     lines[i] = `${indent}${formatTime(Math.max(0, s))} --> ${formatTime(e)}${settings}`;
     out.push(lines.join("\n"));
   }
   return out.join("\n\n").trimEnd() + "\n";
+}
+
+/** Subtitle timing fix chosen in the player, remembered per video. */
+export interface SubtitleSync {
+  /** Seconds; positive = later. */
+  offset: number;
+  /** 1, or a frame-rate correction. */
+  scale: number;
+}
+
+export const NO_SYNC: SubtitleSync = { offset: 0, scale: 1 };
+// 25 fps (PAL) vs 23.976 fps (film): the usual mismatch between releases.
+export const FPS_SCALES = [
+  { scale: 1, label: "Normal" },
+  { scale: 25 / 23.976, label: "Más lento (25 → 23.976 fps)" },
+  { scale: 23.976 / 25, label: "Más rápido (23.976 → 25 fps)" },
+] as const;
+
+const syncKey = (videoId: string) => `ap_subsync_${videoId}`;
+
+export function getSubtitleSync(videoId: string): SubtitleSync {
+  try {
+    const raw = JSON.parse(localStorage.getItem(syncKey(videoId)) ?? "null");
+    if (raw && typeof raw.offset === "number" && typeof raw.scale === "number") return raw;
+  } catch {
+    // per-device convenience only
+  }
+  return NO_SYNC;
+}
+
+export function saveSubtitleSync(videoId: string, sync: SubtitleSync) {
+  try {
+    if (!sync.offset && sync.scale === 1) localStorage.removeItem(syncKey(videoId));
+    else localStorage.setItem(syncKey(videoId), JSON.stringify(sync));
+  } catch {
+    // per-device convenience only
+  }
 }
 
 const MAX_TRACKS = 8;

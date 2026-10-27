@@ -246,3 +246,14 @@ describe("iPhone/iPad (any browser: WebKit)", () => {
     expect(onIos("Pelicula.Latino.DTS.mp4", "https://x/b.mp4", 1).audioRisk).toBe(true);
   });
 });
+
+describe("retimeVtt", () => {
+  it("shifts and rescales cue times", async () => {
+    const { retimeVtt } = await import("./subtitles");
+    const vtt = "WEBVTT\n\n00:00:10.000 --> 00:00:12.000\nHola\n\n00:00:01.000 --> 00:00:02.000\nAntes\n";
+    const out = retimeVtt(vtt, -1.5, 2);
+    expect(out).toContain("00:00:18.500 --> 00:00:22.500");
+    expect(out).toContain("00:00:00.500 --> 00:00:02.500");
+    expect(retimeVtt(vtt, -3, 1)).not.toContain("Antes");
+  });
+});

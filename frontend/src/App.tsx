@@ -10,6 +10,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { setAdultAllowed } from "@/lib/stremio";
 import { AddonsProvider } from "./hooks/useAddons";
 import { LibraryProvider } from "./hooks/useLibrary";
+import { RatingsProvider } from "./hooks/useRatings";
 import AuthCallback from "./pages/AuthCallback";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -53,7 +54,9 @@ function RequireProfile() {
   return (
     <AddonsProvider key={`${current.id}-${current.adult_content}`}>
       <LibraryProvider key={current.id}>
-      <AppLayout />
+        <RatingsProvider key={current.id}>
+          <AppLayout />
+        </RatingsProvider>
       </LibraryProvider>
     </AddonsProvider>
   );

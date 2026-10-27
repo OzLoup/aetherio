@@ -12,18 +12,30 @@ import { Label } from "@/components/ui/label";
 import { useAddons } from "@/hooks/useAddons";
 import { android } from "@/lib/android";
 import { desktop } from "@/lib/desktop";
-import { groupLabel, type Channel } from "@/lib/m3u";
+import { countryFlag, countryName, groupLabel, type Channel } from "@/lib/m3u";
+import { NativeSelect } from "@/components/ui/native-select";
 import { catalogTitle } from "@/lib/labels";
 import { discoverHref, playerPath } from "@/lib/routes";
 import { browsableCatalogs } from "@/lib/stremio";
 import { cn } from "@/lib/utils";
 import type { PlayerState } from "./Streams";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
 
 /** Live TV addon a profile can add in one click (static, hosted on GitHub). */
 export const USA_TV_NEXT = "https://raw.githubusercontent.com/yowmamasita/usa-tv-next/main/manifest.json";
 const PAGE = 60;
 const LIST_KEY = "ap_tv_list";
+const COUNTRY_KEY = "ap_tv_country";
+// Pseudo-category: every Pluto TV channel, wherever it says it's from.
+const PLUTO = "__pluto";
+
+function remembered(key: string) {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 /** The browser can't open plain-http links from an https site, nor raw
  * MPEG-TS: those channels only play in the apps (Android, Mac). */
@@ -41,6 +53,17 @@ export default function Tv() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("");
+  // Per device, like the chosen list.
+  const [country, setCountryState] = useState(() => remembered(COUNTRY_KEY));
+  function setCountry(c: string) {
+    setCountryState(c);
+    setLimit(PAGE);
+    try {
+      localStorage.setItem(COUNTRY_KEY, c);
+    } catch {
+      // per-device convenience only
+    }
+  }
   const [limit, setLimit] = useState(PAGE);
   const [adding, setAdding] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -87,12 +110,25 @@ export default function Tv() {
     return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g);
   }, [channels]);
 
+  // Countries in this list, most channels first.
+  const countries = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const c of channels ?? []) if (c.country) count.set(c.country, (count.get(c.country) ?? 0) + 1);
+    return [...count.entries()].sort((a, b) => b[1] - a[1]);
+  }, [channels]);
+  const hasPluto = useMemo(() => (channels ?? []).some((c) => c.pluto), [channels]);
+  // A remembered country this list doesn't have: show everything.
+  const activeCountry = countries.some(([c]) => c === country) ? country : "";
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (channels ?? []).filter(
-      (c) => (!group || c.groups.includes(group)) && (!q || c.name.toLowerCase().includes(q)),
+      (c) =>
+        (!activeCountry || c.country === activeCountry) &&
+        (!group || (group === PLUTO ? c.pluto : c.groups.includes(group))) &&
+        (!q || c.name.toLowerCase().includes(q)),
     );
-  }, [channels, query, group]);
+  }, [channels, query, group, activeCountry]);
 
   function play(c: Channel) {
     if (webCantPlay(c)) {
@@ -232,6 +268,21 @@ export default function Tv() {
                 aria-label={t("Buscar canal")}
               />
             </div>
+            {countries.length > 1 && (
+              <NativeSelect
+                value={activeCountry}
+                onChange={(e) => setCountry(e.target.value)}
+                className="w-56"
+                aria-label={t("País")}
+              >
+                <option value="">{t("Todos los países")}</option>
+                {countries.map(([code, n]) => (
+                  <option key={code} value={code}>
+                    {countryFlag(code)} {countryName(code, locale())} ({n})
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
             {channels && (
               <span className="text-sm text-muted-foreground">{t("{n} canales", { n: filtered.length })}</span>
             )}
@@ -239,7 +290,7 @@ export default function Tv() {
 
           {groups.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
-              {["", ...groups.slice(0, 24)].map((g) => (
+              {["", ...(hasPluto ? [PLUTO] : []), ...groups.slice(0, 24)].map((g) => (
                 <button
                   key={g || "all"}
                   onClick={() => {
@@ -251,7 +302,7 @@ export default function Tv() {
                     group === g ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-muted",
                   )}
                 >
-                  {g ? t(groupLabel(g)) : t("Todos")}
+                  {g === PLUTO ? "Pluto TV" : g ? t(groupLabel(g)) : t("Todos")}
                 </button>
               ))}
             </div>

@@ -414,6 +414,8 @@ export const en: Record<string, string> = {
   "Tu debrid todavía está descargando este archivo. Vuelve a intentarlo en unos minutos o elige otro stream.": "Your debrid is still downloading this file. Try again in a few minutes or pick another stream.",
   "No se pudo reproducir este stream.": "This stream couldn't be played.",
   // --- live TV & parental control ---
+  "País": "Country",
+  "Todos los países": "All countries",
   "Activarlo pide el PIN; apagarlo no. Mientras está apagado, los addons, listas y canales +18 de este perfil se ocultan.": "Turning it on asks for the PIN; turning it off doesn't. While it's off, this profile's 18+ addons, lists and channels are hidden.",
   "Agrega una lista de canales (hay listas públicas y gratuitas en español, con Pluto TV y novelas) o un addon de TV en vivo.": "Add a channel list (there are free public lists in Spanish, with Pluto TV and telenovelas) or a live TV addon.",
   "Agregar": "Add",

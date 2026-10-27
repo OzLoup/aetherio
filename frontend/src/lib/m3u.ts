@@ -15,6 +15,32 @@ export interface Channel {
   url: string;
   /** Headers some servers require (Referer, User-Agent). */
   headers?: Record<string, string>;
+  /** ISO country code (MX, AR…), from tvg-country or iptv-org's tvg-id ("Canal5.mx@SD"). */
+  country?: string;
+  /** Pluto TV channel (its Latin American ones are tagged as US). */
+  pluto: boolean;
+}
+
+function countryOf(attrs: Record<string, string>) {
+  const explicit = attrs["tvg-country"]?.split(/[;,]/)[0]?.trim();
+  const code = explicit || attrs["tvg-id"]?.match(/\.([a-z]{2})(?:@|$)/i)?.[1];
+  if (!code || code.length !== 2) return undefined;
+  const upper = code.toUpperCase();
+  return upper === "UK" ? "GB" : upper;
+}
+
+/** 🇲🇽 from "MX". */
+export function countryFlag(code: string) {
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+/** "México" / "Mexico", in the app's language. */
+export function countryName(code: string, locale: string) {
+  try {
+    return new Intl.DisplayNames([locale], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 const ATTR = /([a-zA-Z0-9-]+)="([^"]*)"/g;
@@ -62,6 +88,8 @@ export function parseM3u(text: string): Channel[] {
         groups: groups.length ? groups : ["General"],
         url,
         headers: Object.keys(pending.headers).length ? pending.headers : undefined,
+        country: countryOf(pending.attrs),
+        pluto: /pluto\.tv/i.test(`${pending.attrs["tvg-logo"] ?? ""} ${url}`),
       });
       pending = null;
     }

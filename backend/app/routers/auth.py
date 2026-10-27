@@ -7,7 +7,8 @@ from app.auth import create_access_token, get_current_user, hash_password, verif
 from app.config import settings
 from app.database import get_db
 from app.models import Profile, User
-from app.schemas import PasswordChange, Token, UserCreate, UserLogin, UserOut, UserUpdate
+from app.parental import check_pin
+from app.schemas import PasswordChange, PinSet, PinVerify, Token, UserCreate, UserLogin, UserOut, UserUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -58,6 +59,7 @@ def _user_out(user: User) -> UserOut:
         name=user.name,
         has_password=bool(user.hashed_password),
         google_linked=bool(user.google_id),
+        has_pin=bool(user.parental_pin_hash),
     )
 
 
@@ -139,3 +141,27 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
     # Token in the URL fragment: never reaches server logs or browser history.
     return _login_redirect(client, f"token={create_access_token(user.email)}")
+
+
+# ---------- Parental control PIN ----------
+
+
+@router.put("/pin", status_code=status.HTTP_204_NO_CONTENT)
+def set_pin(payload: PinSet, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.parental_pin_hash:
+        by_password = bool(
+            payload.password
+            and current_user.hashed_password
+            and verify_password(payload.password, current_user.hashed_password)
+        )
+        if not by_password:
+            if not payload.current_pin:
+                raise HTTPException(status_code=403, detail="El PIN actual o la contraseña no son correctos")
+            check_pin(current_user, payload.current_pin)  # 403/429 when wrong
+    current_user.parental_pin_hash = hash_password(payload.pin)
+    db.commit()
+
+
+@router.post("/pin/verify", status_code=status.HTTP_204_NO_CONTENT)
+def verify_pin(payload: PinVerify, current_user: User = Depends(get_current_user)):
+    check_pin(current_user, payload.pin)

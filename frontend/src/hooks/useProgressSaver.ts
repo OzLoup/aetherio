@@ -27,7 +27,8 @@ export function useProgressSaver({ videoId, ctx, position, duration, paused, ena
   const save = useCallback(
     (force: boolean) => {
       const { position: p, duration: d, enabled: on, ctx: c } = latest.current;
-      if (!on || !c || d < 90 || p < 5) return;
+      // Live TV has no end (Infinity): nothing to resume.
+      if (!on || !c || !Number.isFinite(d) || d < 90 || p < 5) return;
       if (!force && lastSaved.current !== null && Math.abs(p - lastSaved.current) < 15) return;
       lastSaved.current = p;
       saveProgress(videoId, c, p, d).catch((err) => console.warn("[progress] save failed", err));
@@ -53,7 +54,8 @@ export function useProgressSaver({ videoId, ctx, position, duration, paused, ena
   useEffect(() => {
     const onHide = () => {
       const { position: p, duration: d, enabled: on, ctx: c } = latest.current;
-      if (!on || !c || d < 90 || p < 5) return;
+      // Live TV has no end (Infinity): nothing to resume.
+      if (!on || !c || !Number.isFinite(d) || d < 90 || p < 5) return;
       // keepalive: survives the page going away (axios can't do that).
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       const token = getToken();

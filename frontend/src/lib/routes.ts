@@ -37,3 +37,7 @@ export function progressContextFrom(params: URLSearchParams, type: string, video
 export function playerPath(type: string, videoId: string) {
   return `/play/${encodeURIComponent(type)}/${encodeURIComponent(videoId)}`;
 }
+
+export function discoverHref(addonId: number, type: string, catalogId: string) {
+  return `/discover?${new URLSearchParams({ addon: String(addonId), type, catalog: catalogId })}`;
+}

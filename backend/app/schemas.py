@@ -25,6 +25,7 @@ class UserOut(BaseModel):
     name: str | None = None
     has_password: bool = False
     google_linked: bool = False
+    has_pin: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -35,6 +36,22 @@ class PasswordChange(BaseModel):
     # Not needed for accounts that only used Google so far.
     current_password: str | None = None
     new_password: str = Field(min_length=8, max_length=200)
+
+
+# Parental control PIN: 4 to 8 digits.
+Pin = Field(pattern=r"^\d{4,8}$")
+
+
+class PinSet(BaseModel):
+    pin: str = Pin
+    # Changing an existing PIN takes the current one, or the account password
+    # (for a forgotten PIN).
+    current_pin: str | None = None
+    password: str | None = None
+
+
+class PinVerify(BaseModel):
+    pin: str = Field(max_length=8)
 
 
 class Token(BaseModel):
@@ -89,6 +106,9 @@ class ProfileUpdate(_ProfileName):
     subtitle_language: ProfileLanguage | None = None
     subtitles_mode: SubtitlesMode | None = None
     max_quality: MaxQuality | None = None
+    adult_content: bool | None = None
+    # Required to turn adult_content on.
+    pin: str | None = Field(default=None, max_length=8)
 
 
 class ProfileOut(BaseModel):
@@ -102,6 +122,7 @@ class ProfileOut(BaseModel):
     subtitle_language: str
     subtitles_mode: str
     max_quality: str
+    adult_content: bool = False
 
 
 # ---------- Addons ----------
@@ -125,6 +146,8 @@ class AddonPreviewOut(BaseModel):
     transport_url: str
     manifest: dict
     already_installed: bool
+    # +18 addon: installable only on profiles that allow adult content.
+    adult: bool = False
 
 
 class AddonOut(BaseModel):
@@ -135,6 +158,7 @@ class AddonOut(BaseModel):
     manifest: dict
     position: int
     enabled: bool
+    adult: bool = False
     installed_at: datetime
     manifest_updated_at: datetime
 
@@ -199,3 +223,22 @@ class ProgressOut(BaseModel):
     duration: float
     watched: bool
     updated_at: datetime
+
+
+# ---------- IPTV playlists ----------
+
+
+class PlaylistIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    url: str = Field(min_length=1, max_length=4096)
+
+
+class PlaylistOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    url: str
+    adult: bool
+    position: int
+    created_at: datetime

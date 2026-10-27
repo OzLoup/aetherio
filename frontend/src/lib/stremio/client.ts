@@ -1,3 +1,4 @@
+import { hideAdult } from "./adult";
 import { addonBaseUrl, isDebridLibraryCatalog } from "./manifest";
 import type { AddonRef, CatalogDescriptor, Extra, Manifest, MetaDetail, MetaPreview, ResourceName, Stream, Subtitle } from "./types";
 import { t } from "@/i18n";
@@ -38,7 +39,7 @@ export function requiredExtraNames(catalog: CatalogDescriptor): string[] {
 }
 
 export function genreOptions(catalog: CatalogDescriptor): string[] {
-  return (catalog.extra ?? []).find((e) => e.name === "genre")?.options ?? [];
+  return ((catalog.extra ?? []).find((e) => e.name === "genre")?.options ?? []).filter((g) => !hideAdult.genre(g));
 }
 
 // Small in-memory cache: navigating back to Home shouldn't refetch every row.
@@ -69,7 +70,7 @@ export async function getCatalog(addon: AddonRef, type: string, catalogId: strin
   const data = await fetchResource<{ metas?: MetaPreview[] }>(
     resourceUrl(addon.transportUrl, "catalog", type, catalogId, extra),
   );
-  return (data.metas ?? []).filter((m) => m && m.id && m.name);
+  return (data.metas ?? []).filter((m) => m && m.id && m.name && !hideAdult.meta(m));
 }
 
 /** Ask addons in priority order and return the first full meta found. */
@@ -90,7 +91,7 @@ export async function getMeta(addons: AddonRef[], type: string, id: string) {
 export function searchCatalogs(addons: AddonRef[]) {
   return addons.flatMap((addon) =>
     (addon.manifest.catalogs ?? [])
-      .filter((c) => catalogExtraNames(c).includes("search") && !isDebridLibraryCatalog(c))
+      .filter((c) => catalogExtraNames(c).includes("search") && !isDebridLibraryCatalog(c) && !hideAdult.catalog(c))
       .map((catalog) => ({ addon, catalog })),
   );
 }

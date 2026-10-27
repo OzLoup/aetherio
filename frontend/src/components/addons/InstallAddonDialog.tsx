@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { configureUrl, type Manifest } from "@/lib/stremio";
 import { AddonBadges } from "./AddonBadges";
 import { AddonLogo } from "./AddonLogo";
+import { useProfiles } from "@/context/ProfileContext";
 import { t } from "@/i18n";
 
 interface InstallAddonDialogProps {
@@ -68,7 +69,10 @@ export function InstallAddonDialog({ open, onOpenChange, initialUrl, preview, in
     }
   }
 
+  const { current } = useProfiles();
   const needsConfig = result?.manifest.behaviorHints?.configurationRequired;
+  // +18 addons install only on profiles that allow adult content.
+  const adultBlocked = Boolean(result?.adult && !current?.adult_content);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +137,12 @@ export function InstallAddonDialog({ open, onOpenChange, initialUrl, preview, in
                 </span>
               </p>
             )}
+            {adultBlocked && (
+              <p className="flex gap-2 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                {t("Este addon es para adultos (+18). Actívalo en Ajustes → Control parental de este perfil para instalarlo aquí.")}
+              </p>
+            )}
             {result.already_installed && <p className="text-sm text-muted-foreground">{t("Ya tienes este addon instalado.")}</p>}
           </div>
         )}
@@ -141,7 +151,7 @@ export function InstallAddonDialog({ open, onOpenChange, initialUrl, preview, in
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("Cancelar")}
           </Button>
-          <Button onClick={handleInstall} disabled={!result || loading || needsConfig || result.already_installed}>
+          <Button onClick={handleInstall} disabled={!result || loading || needsConfig || result.already_installed || adultBlocked}>
             {loading && result ? <Loader2 className="animate-spin" /> : <Plus />}
             {t("Instalar")}
           </Button>

@@ -6,17 +6,18 @@ import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { SuggestedAddons } from "@/components/catalog/SuggestedAddons";
 import { useAddons } from "@/hooks/useAddons";
 import { catalogTitle } from "@/lib/labels";
+import { discoverHref } from "@/lib/routes";
 import { browsableCatalogs } from "@/lib/stremio";
 
-export function discoverHref(addonId: number, type: string, catalogId: string) {
-  return `/discover?${new URLSearchParams({ addon: String(addonId), type, catalog: catalogId })}`;
-}
 
 /** One row per browsable catalog of every enabled addon, in addon priority order. */
 export default function Home() {
   const { active, loading } = useAddons();
   const rows = active.flatMap((addon) =>
-    browsableCatalogs(addon.manifest).map((catalog) => ({ addon, catalog })),
+    browsableCatalogs(addon.manifest)
+      // Live channels have their own page (TV en vivo).
+      .filter((catalog) => catalog.type !== "tv")
+      .map((catalog) => ({ addon, catalog })),
   );
 
   if (loading) {

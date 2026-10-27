@@ -74,31 +74,34 @@ def _check_host_allowed(url: str) -> None:
             raise AddonError("No se permiten addons alojados en redes privadas o locales")
 
 
-def fetch_manifest(manifest_url: str) -> tuple[Manifest, dict]:
-    """Download and validate a manifest. Returns (parsed, raw_json)."""
-    url = manifest_url
+def safe_get(url: str, max_bytes: int, accept: str = "*/*", too_big: str = "La respuesta es demasiado grande") -> bytes:
+    """GET with the SSRF guard on every redirect hop and a size cap."""
     with httpx.Client(timeout=settings.addon_fetch_timeout_seconds, follow_redirects=False) as client:
         for _ in range(MAX_REDIRECTS + 1):
             _check_host_allowed(url)
             try:
-                with client.stream("GET", url, headers={"Accept": "application/json"}) as resp:
+                with client.stream("GET", url, headers={"Accept": accept}) as resp:
                     if resp.is_redirect:
                         url = urljoin(url, resp.headers.get("location", ""))
                         continue
                     if resp.status_code != 200:
-                        raise AddonError(f"El addon respondió con error {resp.status_code}")
+                        raise AddonError(f"El servidor respondió con error {resp.status_code}")
                     body = bytearray()
                     for chunk in resp.iter_bytes():
                         body.extend(chunk)
-                        if len(body) > settings.addon_manifest_max_bytes:
-                            raise AddonError("El manifest es demasiado grande")
-                    break
+                        if len(body) > max_bytes:
+                            raise AddonError(too_big)
+                    return bytes(body)
             except httpx.TimeoutException as exc:
-                raise AddonError("El addon tardó demasiado en responder") from exc
+                raise AddonError("El servidor tardó demasiado en responder") from exc
             except httpx.HTTPError as exc:
-                raise AddonError("No se pudo conectar con el addon") from exc
-        else:
-            raise AddonError("El addon redirige demasiadas veces")
+                raise AddonError("No se pudo conectar con el servidor") from exc
+        raise AddonError("Demasiadas redirecciones")
+
+
+def fetch_manifest(manifest_url: str) -> tuple[Manifest, dict]:
+    """Download and validate a manifest. Returns (parsed, raw_json)."""
+    body = safe_get(manifest_url, settings.addon_manifest_max_bytes, "application/json", "El manifest es demasiado grande")
 
     try:
         raw = json.loads(body)

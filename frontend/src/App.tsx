@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProfileProvider, useProfiles } from "./context/ProfileContext";
 import { I18nProvider } from "./i18n";
 import { ThemeProvider } from "./context/ThemeContext";
+import { setAdultAllowed } from "@/lib/stremio";
 import { AddonsProvider } from "./hooks/useAddons";
 import AuthCallback from "./pages/AuthCallback";
 import Home from "./pages/Home";
@@ -23,6 +24,7 @@ const Streams = lazy(() => import("./pages/Streams"));
 const Player = lazy(() => import("./pages/Player"));
 const History = lazy(() => import("./pages/History"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Tv = lazy(() => import("./pages/Tv"));
 
 function FullPageLoader() {
   return (
@@ -44,8 +46,10 @@ function RequireProfile() {
   const { current, loading } = useProfiles();
   if (loading) return <FullPageLoader />;
   if (!current) return <Navigate to="/profiles" replace />;
+  // +18 content follows the profile; toggling it reloads the addons.
+  setAdultAllowed(Boolean(current.adult_content));
   return (
-    <AddonsProvider key={current.id}>
+    <AddonsProvider key={`${current.id}-${current.adult_content}`}>
       <AppLayout />
     </AddonsProvider>
   );
@@ -82,6 +86,7 @@ export default function App() {
                 <Route element={<RequireProfile />}>
                   <Route path="/" element={<Home />} />
                   <Route path="/discover" element={<Discover />} />
+                  <Route path="/tv" element={<Tv />} />
                   <Route path="/search" element={<Search />} />
                   <Route path="/detail/:type/:id" element={<Detail />} />
                   <Route path="/addons" element={<Addons />} />

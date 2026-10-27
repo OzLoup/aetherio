@@ -1,3 +1,4 @@
+import { hideAdult } from "./adult";
 import type { CatalogDescriptor, Manifest, ResourceName } from "./types";
 
 export function resourceNames(manifest: Manifest): ResourceName[] {
@@ -26,6 +27,6 @@ export function isDebridLibraryCatalog(catalog: CatalogDescriptor) {
 /** Catalogs that show up on their own (no required extra like `search`). */
 export function browsableCatalogs(manifest: Manifest) {
   return (manifest.catalogs ?? []).filter(
-    (c) => !(c.extra ?? []).some((e) => e.isRequired) && !(c.extraRequired ?? []).length && !isDebridLibraryCatalog(c),
+    (c) => !(c.extra ?? []).some((e) => e.isRequired) && !(c.extraRequired ?? []).length && !isDebridLibraryCatalog(c) && !hideAdult.catalog(c),
   );
 }

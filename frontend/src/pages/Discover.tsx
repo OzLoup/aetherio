@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useAddons } from "@/hooks/useAddons";
 import { typeLabel } from "@/lib/labels";
-import { catalogExtraNames, genreOptions, getCatalog, isDebridLibraryCatalog, requiredExtraNames, type Extra, type MetaPreview } from "@/lib/stremio";
+import { catalogExtraNames, genreOptions, hideAdult, getCatalog, isDebridLibraryCatalog, requiredExtraNames, type Extra, type MetaPreview } from "@/lib/stremio";
 import { t } from "@/i18n";
 
 const TYPE_ORDER = ["movie", "series"];
@@ -25,7 +25,7 @@ export default function Discover() {
     () =>
       active.flatMap((addon) =>
         (addon.manifest.catalogs ?? [])
-          .filter((c) => requiredExtraNames(c).every((n) => n === "genre") && !isDebridLibraryCatalog(c))
+          .filter((c) => requiredExtraNames(c).every((n) => n === "genre") && !isDebridLibraryCatalog(c) && !hideAdult.catalog(c))
           .map((catalog) => ({ addon, catalog })),
       ),
     [active],

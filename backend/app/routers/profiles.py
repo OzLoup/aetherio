@@ -7,6 +7,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import Profile, User
+from app.parental import check_pin
 from app.schemas import ProfileCreate, ProfileOut, ProfileUpdate
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -58,7 +59,12 @@ def update_profile(
     profile_id: int, payload: ProfileUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     profile = _get_owned(db, user, profile_id)
-    for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
+    changes = payload.model_dump(exclude_unset=True, exclude_none=True)
+    pin = changes.pop("pin", None)
+    # Allowing +18 content takes the parental PIN; taking it away doesn't.
+    if changes.get("adult_content") and not profile.adult_content:
+        check_pin(user, pin)
+    for field, value in changes.items():
         setattr(profile, field, value)
     db.commit()
     db.refresh(profile)

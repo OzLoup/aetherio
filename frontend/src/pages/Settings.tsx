@@ -1,4 +1,4 @@
-import { Check, Gauge, Globe, KeyRound, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
+import { Check, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, getErrorDetail } from "@/api/client";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Switch } from "@/components/ui/switch";
+import { PinDialog } from "@/components/profiles/PinDialog";
 import { useAuth } from "@/context/AuthContext";
 import { useProfiles } from "@/context/ProfileContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -224,6 +226,8 @@ export default function Settings() {
         </Field>
       </Section>
 
+      <ParentalControl onSaved={() => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); }} />
+
       <Section icon={<KeyRound />} title={t("Cuenta")} description={user?.email}>
         <Field label={t("Nombre de la cuenta")} htmlFor="s-account">
           <form className="flex gap-2" onSubmit={saveAccountName}>
@@ -285,5 +289,112 @@ export default function Settings() {
         {APP_NAME} {desktop ? `· ${t("app de Mac")} v${desktop.version}` : `· ${t("versión web")}`}
       </p>
     </div>
+  );
+}
+
+/** Account PIN + "allow +18 content" for this profile (turning it on takes the PIN). */
+function ParentalControl({ onSaved }: { onSaved: () => void }) {
+  const { current, update } = useProfiles();
+  const { user, refresh } = useAuth();
+  const [pinForm, setPinForm] = useState({ current: "", next: "", confirm: "" });
+  const [pinState, setPinState] = useState<"idle" | "saving" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  if (!current) return null;
+  const hasPin = Boolean(user?.has_pin);
+
+  async function savePin(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (pinForm.next !== pinForm.confirm) return setError(t("Los PIN no coinciden"));
+    setPinState("saving");
+    try {
+      const old = pinForm.current;
+      await api.put("/auth/pin", {
+        pin: pinForm.next,
+        // The current PIN, or the account password if it was forgotten.
+        current_pin: hasPin && /^\d{4,8}$/.test(old) ? old : null,
+        password: hasPin ? old : null,
+      });
+      setPinForm({ current: "", next: "", confirm: "" });
+      setPinState("done");
+      await refresh();
+      onSaved();
+    } catch (err) {
+      setError(t(getErrorDetail(err) ?? t("No se pudo guardar el PIN")));
+      setPinState("idle");
+    }
+  }
+
+  async function toggleAdult(on: boolean) {
+    setError(null);
+    if (!on) {
+      try {
+        await update(current!.id, { adult_content: false });
+        onSaved();
+      } catch (err) {
+        setError(t(getErrorDetail(err) ?? t("No se pudo guardar el cambio")));
+      }
+      return;
+    }
+    if (!hasPin) return setError(t("Primero crea un PIN de control parental (abajo)."));
+    setAsking(true);
+  }
+
+  const digits = (v: string) => v.replace(/\D/g, "").slice(0, 8);
+
+  return (
+    <Section
+      icon={<ShieldCheck />}
+      title={t("Control parental")}
+      description={t("El contenido para adultos (+18) está apagado en cada perfil hasta que lo actives con el PIN.")}
+    >
+      {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+      <label className="flex items-start gap-3">
+        <Switch checked={current.adult_content} onCheckedChange={toggleAdult} className="mt-0.5" />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium">{t("Permitir contenido para adultos en {name}", { name: current.name })}</span>
+          <span className="text-xs text-muted-foreground">
+            {t("Activarlo pide el PIN; apagarlo no. Mientras está apagado, los addons, listas y canales +18 de este perfil se ocultan.")}
+          </span>
+        </span>
+      </label>
+
+      <form onSubmit={savePin} className="flex flex-col gap-3 border-t border-border pt-4">
+        <p className="text-sm font-medium">{hasPin ? t("Cambiar PIN") : t("Crear PIN")}</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {hasPin && (
+            <Field label={t("PIN actual o contraseña")} htmlFor="pin-current">
+              <Input id="pin-current" type="password" autoComplete="off" value={pinForm.current} onChange={(e) => setPinForm({ ...pinForm, current: e.target.value })} />
+            </Field>
+          )}
+          <Field label={t("PIN nuevo (4 a 8 números)")} htmlFor="pin-new">
+            <Input id="pin-new" type="password" inputMode="numeric" autoComplete="off" value={pinForm.next} onChange={(e) => setPinForm({ ...pinForm, next: digits(e.target.value) })} />
+          </Field>
+          <Field label={t("Repite el PIN")} htmlFor="pin-confirm">
+            <Input id="pin-confirm" type="password" inputMode="numeric" autoComplete="off" value={pinForm.confirm} onChange={(e) => setPinForm({ ...pinForm, confirm: digits(e.target.value) })} />
+          </Field>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button type="submit" variant="outline" disabled={pinState === "saving" || pinForm.next.length < 4 || (hasPin && !pinForm.current)}>
+            {pinState === "saving" && <Loader2 className="animate-spin" />}
+            {hasPin ? t("Cambiar PIN") : t("Crear PIN")}
+          </Button>
+          {pinState === "done" && <span className="text-sm text-success">{t("PIN guardado")}</span>}
+        </div>
+        <p className="text-xs text-muted-foreground">{t("El PIN es de la cuenta: sirve para todos los perfiles. Si lo olvidas, cámbialo con la contraseña de la cuenta.")}</p>
+      </form>
+
+      <PinDialog
+        open={asking}
+        onOpenChange={setAsking}
+        title={t("Permitir contenido para adultos")}
+        description={t("Escribe el PIN de control parental para activarlo en {name}.", { name: current.name })}
+        onSubmit={async (pin) => {
+          await update(current.id, { adult_content: true, pin });
+          onSaved();
+        }}
+      />
+    </Section>
   );
 }

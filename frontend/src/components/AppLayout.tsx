@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Compass, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users } from "lucide-react";
+import { ArrowLeftRight, Compass, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users, Radio } from "lucide-react";
 import { Suspense, useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import { ProfileAvatar } from "./profiles/ProfileAvatar";
 const NAV = [
   { to: "/", label: "Inicio", icon: Home },
   { to: "/discover", label: "Descubrir", icon: Compass },
+  { to: "/tv", label: "TV en vivo", icon: Radio },
   { to: "/history", label: "Historial", icon: History },
   { to: "/addons", label: "Addons", icon: Puzzle },
 ];

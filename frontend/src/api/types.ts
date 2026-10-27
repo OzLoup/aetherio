@@ -7,6 +7,8 @@ export interface User {
   name?: string | null;
   has_password?: boolean;
   google_linked?: boolean;
+  /** Parental control PIN set for the account. */
+  has_pin?: boolean;
 }
 
 export const PROFILE_COLORS = [
@@ -35,11 +37,13 @@ export interface Profile {
   subtitles_mode: "auto" | "always" | "off";
   /** Prefer streams up to this quality. */
   max_quality: "max" | "1080p" | "720p" | "480p";
+  /** +18 addons, lists and channels (turning it on takes the PIN). */
+  adult_content: boolean;
 }
 
 export type ProfileSettings = Partial<
-  Pick<Profile, "name" | "color" | "language" | "ui_language" | "subtitle_language" | "subtitles_mode" | "max_quality">
->;
+  Pick<Profile, "name" | "color" | "language" | "ui_language" | "subtitle_language" | "subtitles_mode" | "max_quality" | "adult_content">
+> & { pin?: string };
 
 export const MAX_PROFILES = 5;
 
@@ -49,6 +53,7 @@ export interface InstalledAddon {
   manifest: Manifest;
   position: number;
   enabled: boolean;
+  adult?: boolean;
   installed_at: string;
   manifest_updated_at: string;
 }
@@ -57,4 +62,14 @@ export interface AddonPreview {
   transport_url: string;
   manifest: Manifest;
   already_installed: boolean;
+  adult?: boolean;
+}
+
+export interface Playlist {
+  id: number;
+  name: string;
+  url: string;
+  adult: boolean;
+  position: number;
+  created_at: string;
 }

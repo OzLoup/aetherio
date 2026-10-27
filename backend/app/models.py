@@ -19,6 +19,9 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    # Parental control PIN (hashed like passwords): needed to allow adult
+    # content on a profile and to enter a profile that allows it.
+    parental_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profiles: Mapped[list["Profile"]] = relationship(
@@ -47,6 +50,9 @@ class Profile(Base):
     subtitle_language: Mapped[str] = mapped_column(String(10), default="es-419")
     subtitles_mode: Mapped[str] = mapped_column(String(10), default="auto")
     max_quality: Mapped[str] = mapped_column(String(10), default="max")
+    # +18 addons, playlists and channels. Off by default; turning it on
+    # takes the account's parental PIN.
+    adult_content: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="profiles")
@@ -54,6 +60,9 @@ class Profile(Base):
         back_populates="profile", cascade="all, delete-orphan", order_by="ProfileAddon.position"
     )
     progress: Mapped[list["WatchProgress"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
+    playlists: Mapped[list["ProfilePlaylist"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan", order_by="ProfilePlaylist.position"
+    )
 
 
 class ProfileAddon(Base):
@@ -79,6 +88,8 @@ class ProfileAddon(Base):
     # Stremio's addon order.
     position: Mapped[int] = mapped_column(default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Says itself it's +18 (app/adult.py): only on profiles that allow it.
+    adult: Mapped[bool] = mapped_column(Boolean, default=False)
     installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     manifest_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -117,3 +128,23 @@ class WatchProgress(Base):
     )
 
     profile: Mapped["Profile"] = relationship(back_populates="progress")
+
+
+class ProfilePlaylist(Base):
+    """A live TV (IPTV) M3U playlist added to a profile. The browser/app
+    downloads and parses it; video goes straight from the channel's server to
+    the device. The URL may carry credentials, so it's encrypted at rest."""
+
+    __tablename__ = "profile_playlists"
+    __table_args__ = (UniqueConstraint("profile_id", "url_hash", name="uq_profile_playlist_url"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    url: Mapped[str] = mapped_column(EncryptedText)
+    url_hash: Mapped[str] = mapped_column(String(64))
+    adult: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    profile: Mapped["Profile"] = relationship(back_populates="playlists")

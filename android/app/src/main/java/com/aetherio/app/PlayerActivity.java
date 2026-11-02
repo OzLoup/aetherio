@@ -56,6 +56,8 @@ public class PlayerActivity extends Activity {
     static final String EXTRA_REQUEST = "request";
     private static final long PROGRESS_EVERY_MS = 15_000;
     private static final long SKIP_MS = 10_000;
+    /** "Siguiente episodio" pops up this long before the end (credits). */
+    private static final long NEXT_BEFORE_END_MS = 60_000;
 
     private ExoPlayer player;
     private PlayerView view;
@@ -64,6 +66,22 @@ public class PlayerActivity extends Activity {
     private boolean preferLatino;
     private boolean audioChecked = false;
     private boolean finishedSent = false;
+    private boolean hasNext = false;
+    private Button nextOverlay;
+
+    /** Shows the big "Siguiente episodio" during the last minute. */
+    private final Runnable endWatch = new Runnable() {
+        @Override
+        public void run() {
+            if (player != null) {
+                long duration = player.getDuration();
+                boolean near = duration != C.TIME_UNSET && duration > NEXT_BEFORE_END_MS
+                        && duration - player.getCurrentPosition() <= NEXT_BEFORE_END_MS;
+                setOverlay(near || player.getPlaybackState() == Player.STATE_ENDED);
+            }
+            handler.postDelayed(this, 1000);
+        }
+    };
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -102,6 +120,19 @@ public class PlayerActivity extends Activity {
                 PlayerEvents.send("versions", player.getCurrentPosition(), duration == C.TIME_UNSET ? 0 : duration, null);
                 finish();
             });
+        }
+        // Series: the page picks the best source of the next episode.
+        String next = req.optString("nextEpisode", "");
+        hasNext = !next.isEmpty();
+        nextOverlay = findViewById(R.id.next_overlay);
+        if (hasNext) {
+            String label = getString(R.string.next_episode, next);
+            Button nextButton = findViewById(R.id.next_episode);
+            nextButton.setText(label);
+            nextButton.setVisibility(View.VISIBLE);
+            nextButton.setOnClickListener(v -> goNext());
+            nextOverlay.setText(label);
+            nextOverlay.setOnClickListener(v -> goNext());
         }
         preferLatino = req.optBoolean("preferLatino");
         boolean subtitlesOn = req.optBoolean("subtitlesOn");
@@ -180,7 +211,10 @@ public class PlayerActivity extends Activity {
 
             @Override
             public void onPlaybackStateChanged(int state) {
-                if (state == Player.STATE_ENDED) finish();
+                if (state != Player.STATE_ENDED) return;
+                // Series: stay on the last frame with "Siguiente episodio" up.
+                if (hasNext) setOverlay(true);
+                else finish();
             }
 
             @Override
@@ -200,6 +234,31 @@ public class PlayerActivity extends Activity {
         player.prepare();
         player.setPlayWhenReady(true);
         handler.postDelayed(tick, PROGRESS_EVERY_MS);
+        if (hasNext) handler.postDelayed(endWatch, 1000);
+    }
+
+    private void goNext() {
+        if (player == null || finishedSent) return;
+        finishedSent = true;
+        long duration = player.getDuration();
+        PlayerEvents.send("next", player.getCurrentPosition(), duration == C.TIME_UNSET ? 0 : duration, null);
+        finish();
+    }
+
+    private void setOverlay(boolean show) {
+        if (!hasNext) return;
+        int visibility = show ? View.VISIBLE : View.GONE;
+        if (nextOverlay.getVisibility() == visibility) return;
+        nextOverlay.setVisibility(visibility);
+        if (show && !view.isControllerFullyVisible()) nextOverlay.requestFocus();
+    }
+
+    /** Visible buttons of the top bar, left to right. */
+    private View firstTopButton() {
+        View versions = findViewById(R.id.versions);
+        if (versions.getVisibility() == View.VISIBLE) return versions;
+        View next = findViewById(R.id.next_episode);
+        return next.getVisibility() == View.VISIBLE ? next : null;
     }
 
     /** Spanish files often carry Latino and Castilian tracks, both tagged "spa":
@@ -229,6 +288,13 @@ public class PlayerActivity extends Activity {
     /** D-pad: with the controls hidden, left/right skip 10 s and OK shows them. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // OK on the remote with the big "Siguiente episodio" up: go.
+        if (nextOverlay != null && nextOverlay.getVisibility() == View.VISIBLE && !view.isControllerFullyVisible()
+                && event.getAction() == KeyEvent.ACTION_DOWN
+                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+            nextOverlay.performClick();
+            return true;
+        }
         if (player != null && event.getAction() == KeyEvent.ACTION_DOWN && !view.isControllerFullyVisible()) {
             switch (event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
@@ -251,9 +317,10 @@ public class PlayerActivity extends Activity {
                     break;
             }
         }
-        View versions = findViewById(R.id.versions);
-        boolean versionsShown = versions.getVisibility() == View.VISIBLE && view.isControllerFullyVisible();
-        if (versionsShown && versions.hasFocus()) {
+        View topBar = findViewById(R.id.top_bar);
+        View firstTop = firstTopButton();
+        boolean topShown = firstTop != null && view.isControllerFullyVisible();
+        if (topShown && topBar.hasFocus()) {
             // Keep the controls (and this bar) up while the user is on the button.
             view.showController();
             if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN && event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -264,10 +331,10 @@ public class PlayerActivity extends Activity {
         }
         View before = getCurrentFocus();
         boolean handled = view.dispatchKeyEvent(event);
-        // Up from the top row of the controls: on to "Idioma y calidad".
-        if (versionsShown && event.getAction() == KeyEvent.ACTION_DOWN
+        // Up from the top row of the controls: on to the top bar buttons.
+        if (topShown && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP && getCurrentFocus() == before) {
-            versions.requestFocus();
+            firstTop.requestFocus();
             return true;
         }
         return handled || super.dispatchKeyEvent(event);
@@ -312,6 +379,7 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(endWatch);
         if (player != null) {
             if (!finishedSent) {
                 finishedSent = true;

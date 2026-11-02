@@ -5,6 +5,7 @@ import { saveProgress } from "@/api/progress";
 import { Button } from "@/components/ui/button";
 import { useProfiles } from "@/context/ProfileContext";
 import { useAddons } from "@/hooks/useAddons";
+import { useNextEpisode } from "@/hooks/useNextEpisode";
 import { android, type NativeSubtitle } from "@/lib/android";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
@@ -44,6 +45,9 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
   const langOptions = languageOptions(alternatives);
   const qualities = qualityOptions(alternatives, stream.url ?? "", languages, language);
   const hasVersions = langOptions.length > 1 || qualities.length > 1;
+  const nextEp = useNextEpisode(active, type, progress);
+  const nextRef = useRef(nextEp);
+  nextRef.current = nextEp;
 
   /** Same title, another file, same minute (the page remounts per stream). */
   function switchTo(alt: AltStream) {
@@ -88,6 +92,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       subtitles,
       subtitlesOn,
       hasVersions,
+      nextEpisode: nextRef.current?.code || undefined,
     });
     setStatus("playing");
   }
@@ -122,6 +127,11 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       })();
       const timeout = new Promise<NativeSubtitle[]>((resolve) => window.setTimeout(() => resolve([]), SUBTITLES_WAIT_MS));
       const subtitles = await Promise.race([load, timeout]);
+      // The native player only gets "Siguiente episodio" at launch: give the
+      // lookup (started at the same time) a moment to finish.
+      for (let waited = 0; nextRef.current === undefined && waited < 4000; waited += 200) {
+        await new Promise((r) => window.setTimeout(r, 200));
+      }
       if (!cancelled) launch(subtitles, (startAt ?? 0) * 1000);
     })();
     return () => {
@@ -144,6 +154,10 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
         }
         void save(e.positionMs, e.durationMs, true).finally(() => navigate(-1));
         setStatus("closed");
+      } else if (e.type === "next") {
+        const next = nextRef.current;
+        setStatus("closed");
+        void save(e.positionMs, e.durationMs, true).finally(() => (next ? navigate(next.href, { replace: true }) : navigate(-1)));
       } else if (e.type === "versions") {
         void save(e.positionMs, e.durationMs, true);
         setStatus("versions");

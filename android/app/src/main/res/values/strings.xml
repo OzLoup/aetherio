@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">AetherIO</string>
     <string name="versions">Idioma y calidad</string>
+    <string name="next_episode">Siguiente episodio · %1$s</string>
 </resources>

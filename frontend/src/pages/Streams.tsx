@@ -53,6 +53,8 @@ export default function Streams() {
   const progress = useMemo(() => progressContextFrom(params, type, id), [params, type, id]);
   // "?from=0": "Desde el inicio" on the detail page.
   const forceStart = params.get("from") === "0";
+  // "?auto=1": "Siguiente episodio" in the player, start the best ready source.
+  const [auto, setAuto] = useState(params.get("auto") === "1");
   const navigate = useNavigate();
   const { active, loading: addonsLoading } = useAddons();
   const { current } = useProfiles();
@@ -158,7 +160,23 @@ export default function Streams() {
   const pending = sources.filter((a) => !results.some((r) => r.addon === a));
   const failed = results.filter((r) => r.error);
 
-  async function play(s: ParsedStream) {
+  // Auto-play once every addon has answered: the list is sorted best first
+  // (profile language, quality, ready). Nothing ready → show the list.
+  useEffect(() => {
+    if (!auto || !allAnswered) return;
+    setAuto(false);
+    const best = parsed.find(
+      (s) =>
+        (s.kind === "direct" || s.kind === "hls") &&
+        s.cached !== false &&
+        !s.incompatible &&
+        (!hasMyLanguage || isDubbedFor(s.languages, language)),
+    );
+    if (best) void play(best, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, allAnswered]);
+
+  async function play(s: ParsedStream, opts: { replace?: boolean } = {}) {
     // Picked up on another device or earlier: resume there.
     const saved = forceStart ? null : await getVideoProgress(id).catch(() => null);
     const startAt = resumePoint(saved);
@@ -173,7 +191,7 @@ export default function Streams() {
       languages: (s.stream.url && verified[s.stream.url]?.length ? verified[s.stream.url] : null) ?? s.languages,
       alternatives: parsed.filter((p) => isPlayable(p) && !p.incompatible).slice(0, MAX_ALTERNATIVES).map(toAlt),
     };
-    navigate(playerPath(type, id), { state });
+    navigate(playerPath(type, id), { state, replace: opts.replace });
   }
 
   /** Streams Safari can't open go straight to VLC (iPhone/iPad). */
@@ -192,6 +210,19 @@ export default function Streams() {
     } else if (s.kind === "direct" || s.kind === "hls") {
       start(s);
     }
+  }
+
+  if (auto) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+        <p className="text-lg font-semibold">{title}</p>
+        <p className="text-sm text-muted-foreground">{t("Buscando la mejor fuente…")}</p>
+        <Button variant="outline" onClick={() => setAuto(false)}>
+          {t("Elegir yo")}
+        </Button>
+      </div>
+    );
   }
 
   return (

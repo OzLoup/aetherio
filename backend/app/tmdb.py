@@ -23,6 +23,8 @@ IMAGES = "https://image.tmdb.org/t/p"
 PAGE_SIZE = 20  # TMDB pages are always 20 results
 CACHE_SECONDS = 3 * 3600
 MISSING_RECHECK = timedelta(days=7)
+# "Recent" lists: skip titles nobody has rated yet (shorts, obscure uploads).
+MIN_VOTES_RECENT = 10
 
 # Country → TMDB language for titles, overviews and posters.
 COUNTRIES: dict[str, tuple[str, str]] = {
@@ -233,6 +235,7 @@ async def catalog(country: str, type_: str, catalog_id: str, extra: dict[str, st
             sort_by=SORTS["recent"][kind],
             with_watch_providers=ALL_PROVIDERS,
             with_watch_monetization_types="flatrate",
+            **{"vote_count.gte": MIN_VOTES_RECENT},
             **{f"{field}.lte": today, f"{field}.gte": since},
         )
     else:
@@ -250,6 +253,7 @@ async def catalog(country: str, type_: str, catalog_id: str, extra: dict[str, st
         if sort == "recent":
             field = "primary_release_date" if kind == "movie" else "first_air_date"
             params[f"{field}.lte"] = date.today().isoformat()
+            params["vote_count.gte"] = MIN_VOTES_RECENT
         data = await _get(f"/discover/{kind}", **params)
 
     items = [i for i in data.get("results", []) if i.get("id")]

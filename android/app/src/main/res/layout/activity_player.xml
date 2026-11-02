@@ -48,5 +48,38 @@
             android:textColor="@android:color/white"
             android:textSize="15sp"
             android:visibility="gone" />
+
+        <!-- Next episode, any time (series only). -->
+        <Button
+            android:id="@+id/next_episode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/top_button"
+            android:focusable="true"
+            android:minHeight="40dp"
+            android:paddingHorizontal="16dp"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:visibility="gone" />
     </LinearLayout>
+
+    <!-- Same, big, during the last minute (credits) and when it ends. -->
+    <Button
+        android:id="@+id/next_overlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="48dp"
+        android:layout_marginBottom="120dp"
+        android:background="@drawable/next_button"
+        android:focusable="true"
+        android:minHeight="52dp"
+        android:paddingHorizontal="24dp"
+        android:textAllCaps="false"
+        android:textColor="@android:color/black"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 </FrameLayout>

@@ -33,12 +33,14 @@ export interface NativePlayRequest {
   subtitlesOn: boolean;
   /** Show "Idioma y calidad" (other files of this title). */
   hasVersions: boolean;
+  /** "Siguiente episodio" button label (e.g. "T1E3"); absent = no next episode. */
+  nextEpisode?: string;
 }
 
 /** Sent by the native player: every ~15 s, on pause, and when closing. */
 export interface NativePlayerEvent {
-  /** versions = the user asked for another language/quality. */
-  type: "progress" | "closed" | "error" | "versions";
+  /** versions = the user asked for another language/quality; next = next episode. */
+  type: "progress" | "closed" | "error" | "versions" | "next";
   positionMs: number;
   durationMs: number;
   message?: string;

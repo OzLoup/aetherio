@@ -1,4 +1,4 @@
-import { AlertTriangle, Airplay, ArrowLeft, Cast, Check, Copy, Download, Gauge, Languages, ListVideo, Loader2, Maximize, Minimize, Play, RotateCw, Subtitles, VolumeX, Wifi, X } from "lucide-react";
+import { AlertTriangle, Airplay, ArrowLeft, Cast, Check, Copy, Download, Gauge, Languages, ListVideo, Loader2, SkipForward, Maximize, Minimize, Play, RotateCw, Subtitles, VolumeX, Wifi, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CastDevicePicker, CastHelp, CastingOverlay } from "@/components/player/CastPanels";
@@ -9,6 +9,7 @@ import { useAddons } from "@/hooks/useAddons";
 import { useCasting } from "@/hooks/useCasting";
 import { useDesktopSource } from "@/hooks/useDesktopSource";
 import { useProgressSaver } from "@/hooks/useProgressSaver";
+import { useNextEpisode } from "@/hooks/useNextEpisode";
 import { formatTime } from "@/lib/format";
 import { usePlayback } from "@/hooks/usePlayback";
 import { guessContentType, isMkv } from "@/lib/cast";
@@ -546,6 +547,16 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
 
   // --- progress: Continuar viendo / history / watched (synced per profile) ---
   const remote = casting.remote;
+  // Series: offer the next episode near the end (credits) and when it ends.
+  const nextEp = useNextEpisode(active, type, state.progress);
+  const [ended, setEnded] = useState(false);
+  const nearEnd = playback.duration > 0 && playback.duration - playback.currentTime <= 60;
+  function goToNextEpisode() {
+    if (!nextEp) return;
+    progressSaver.saveNow();
+    navigate(nextEp.href, { replace: true });
+  }
+
   const progressSaver = useProgressSaver({
     videoId: id,
     ctx: state.progress,
@@ -737,8 +748,14 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         }}
         onDoubleClick={toggleFullscreen}
         onPause={() => setChromeVisible(true)}
-        onPlay={poke}
-        onEnded={() => progressSaver.saveNow()}
+        onPlay={() => {
+          poke();
+          setEnded(false);
+        }}
+        onEnded={() => {
+          progressSaver.saveNow();
+          setEnded(true);
+        }}
       >
         {tracks.map((item, i) => (
           <track
@@ -749,6 +766,19 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
             kind="subtitles" label={item.label} srcLang={item.srclang} src={trackSrcs[i]} />
         ))}
       </video>
+
+      {nextEp && (nearEnd || ended) && !fatal && (
+        <button
+          type="button"
+          onClick={goToNextEpisode}
+          className="absolute bottom-28 right-6 z-10 flex items-center gap-2 rounded-md bg-white px-5 py-3 font-semibold text-black shadow-lg transition hover:bg-white/85 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/60"
+          autoFocus
+        >
+          <SkipForward className="size-5" />
+          <span>{t("Siguiente episodio")}</span>
+          <span className="text-sm font-normal text-black/60">{nextEp.code}</span>
+        </button>
+      )}
 
       {(playback.waiting || desk.status === "probing") && !downloading && !fatal && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -810,6 +840,12 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         }}
         right={
           <>
+            {nextEp && (
+              <BarButton label={t("Siguiente episodio")} onClick={goToNextEpisode}>
+                <SkipForward />
+                <span className="hidden text-sm sm:inline">{nextEp.code}</span>
+              </BarButton>
+            )}
             {(alternatives.length > 0 || hlsLevels.length > 1) && (
               <BarButton
                 label={t("Calidad")}

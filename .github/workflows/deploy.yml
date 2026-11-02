@@ -1,10 +1,17 @@
 # Deploy AetherIO: backend → Google Cloud Run, frontend → Cloudflare Pages,
-# database → Neon. Manual for now (workflow_dispatch); switch to `push: main`
-# once DEPLOY.md is done. Mirrors the nami setup.
+# database → Neon. Runs on every push to main (a merged PR) and can also be
+# started by hand (Actions → Deploy → Run workflow). Mirrors the nami setup.
 name: Deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the running one to finish.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 permissions:
   contents: read

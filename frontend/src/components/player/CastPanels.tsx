@@ -171,7 +171,7 @@ export function CastDevicePicker({
               </p>
               {desktop?.openLocalNetworkSettings && (
                 <button
-                  onClick={() => desktop!.openLocalNetworkSettings()}
+                  onClick={() => desktop!.openLocalNetworkSettings!()}
                   className="flex w-fit items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 font-medium text-white hover:bg-white/25"
                   autoFocus
                 >

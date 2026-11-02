@@ -9,7 +9,10 @@ contextBridge.exposeInMainWorld("desktop", {
   ...info,
   openExternal: (url) => ipcRenderer.invoke("desktop:open-external", url),
   /** Casting to Chromecast / DLNA TVs on the local network. */
-  openLocalNetworkSettings: () => ipcRenderer.invoke("desktop:open-local-network-settings"),
+  // macOS only (Privacy & Security → Local Network); Windows has no such switch.
+  ...(process.platform === "darwin"
+    ? { openLocalNetworkSettings: () => ipcRenderer.invoke("desktop:open-local-network-settings") }
+    : {}),
   cast: {
     list: () => ipcRenderer.invoke("cast:list"),
     refresh: () => ipcRenderer.invoke("cast:refresh"),

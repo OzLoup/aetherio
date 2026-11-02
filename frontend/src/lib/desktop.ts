@@ -13,7 +13,7 @@ export interface DesktopInfo {
   /** Open a link in the system browser. */
   openExternal: (url: string) => Promise<void>;
   /** macOS → Privacy & Security → Local Network. */
-  openLocalNetworkSettings: () => Promise<void>;
+  openLocalNetworkSettings?: () => Promise<void>;
   /** Cast to Chromecast / DLNA TVs on the local network (macOS app). */
   cast: DesktopCast;
   /** Google login result coming back through aetherio://; returns unsubscribe. */

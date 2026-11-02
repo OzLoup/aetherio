@@ -17,7 +17,7 @@ import { mediaSupport } from "@/lib/browser";
 import { audioTrackLabel, embeddedSubtitleUrl, isTrackInLanguage, subtitleTrackLabel } from "@/lib/desktop";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath, streamsPath } from "@/lib/routes";
-import { isDubbedFor, isMultiAudio, languageOptions, lighterOption, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
+import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, lighterOption, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
 import { chooseSubtitles, fetchSubtitleVtt, FPS_SCALES, getSubsPref, getSubtitleSync, NO_SYNC, retimeVtt, saveSubtitleSync, setSubsPref, type SubtitleSync } from "@/lib/subtitles";
 import { android } from "@/lib/android";
@@ -78,9 +78,11 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loadingSubs, setLoadingSubs] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
-  // The debrid service is still fetching the torrent and the addon handed us
-  // its short "downloading" placeholder clip instead of the real file.
+  // The source handed us a very short clip instead of the real file: a
+  // debrid's "downloading" placeholder, or (other addons) a notice/preview.
   const [downloading, setDownloading] = useState(false);
+  // "Reproducir igualmente": the user wants to see the short clip.
+  const allowShort = useRef(false);
   const [warning, setWarning] = useState<{ kind: "audio" | "video"; title: string; detail: string } | null>(null);
   const [chromeVisible, setChromeVisible] = useState(true);
   // Index into `tracks` of the subtitle being shown, -1 = off.
@@ -106,6 +108,8 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
   const hideTimer = useRef<number | undefined>(undefined);
   const { stream, title, dubbed, languages, alternatives = [], startAt } = state;
   const url = stream.url!;
+  // Only debrid sources really are "downloading"; never promise a wait otherwise.
+  const debridSource = isDebridStream(stream);
   const proxyHeaders = stream.behaviorHints?.proxyHeaders?.request;
   // macOS app: real audio tracks + local ffmpeg server (no-op on the web).
   const desk = useDesktopSource({
@@ -132,8 +136,11 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       resumedDirect.current = true;
       resumeAt.current = startAt;
     }
-    if (desk.status === "placeholder") setDownloading(true);
-  }, [desk.status, desk.server, startAt]);
+    if (desk.status === "placeholder") {
+      markShortClip(stream);
+      setDownloading(true);
+    }
+  }, [desk.status, desk.server, startAt, stream]);
   // The TV fetches the file itself: never hand it our local server's URL.
   const casting = useCasting(videoRef, { url, title, filename: stream.behaviorHints?.filename }, state.castOnStart, {
     // macOS app: send the original link when the TV can take it as is,
@@ -500,8 +507,9 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
     const onMeta = () => {
       // No movie or episode is under 90 s; Torrentio's placeholder is 30 s.
       // (Not for Real-Debrid live transcodes, whose duration can look odd.)
-      if (!deskRef.current.active && Number.isFinite(video.duration) && video.duration > 0 && video.duration < 90) {
+      if (!allowShort.current && !deskRef.current.active && Number.isFinite(video.duration) && video.duration > 0 && video.duration < 90) {
         video.pause();
+        markShortClip(stream);
         setDownloading(true);
         return;
       }
@@ -704,6 +712,12 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate, poke, toggleFullscreen]);
+
+  function playShortAnyway() {
+    allowShort.current = true;
+    setDownloading(false);
+    void videoRef.current?.play().catch(() => {});
+  }
 
   function retry() {
     const video = videoRef.current;
@@ -1290,7 +1304,31 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         </div>
       )}
 
-      {downloading && !fatal && (
+      {downloading && !fatal && !debridSource && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/90 p-6">
+          <div className="flex max-w-md flex-col items-center gap-4 text-center">
+            <AlertTriangle className="size-10 text-yellow-400" />
+            <p className="text-lg font-semibold">{t("Esta fuente devolvió un video muy corto")}</p>
+            <p className="text-sm text-white/70">
+              {t("Dura menos de un minuto y medio, así que no parece el episodio o la película. Suele ser un aviso del addon (por ejemplo, que la fuente requiere su plan premium) o una vista previa.")}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => navigate(-1)}>
+                <ListVideo />
+                {t("Elegir otra fuente")}
+              </Button>
+              {!desk.active && (
+                <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={playShortAnyway}>
+                  <Play />
+                  {t("Reproducir igualmente")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {downloading && !fatal && debridSource && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 p-6">
           <div className="flex max-w-md flex-col items-center gap-4 text-center">
             <Download className="size-10 text-primary" />

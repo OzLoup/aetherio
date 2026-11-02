@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AddonRef } from "@/lib/stremio";
-import { isMultiAudio, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt } from "./streams";
+import { gaveShortClip, isDebridStream, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt } from "./streams";
 import { shiftVtt, srtToVtt } from "./subtitles";
 
 const torrentio: AddonRef = {
@@ -255,5 +255,43 @@ describe("retimeVtt", () => {
     expect(out).toContain("00:00:18.500 --> 00:00:22.500");
     expect(out).toContain("00:00:00.500 --> 00:00:02.500");
     expect(retimeVtt(vtt, -3, 1)).not.toContain("Antes");
+  });
+});
+
+describe("short clips", () => {
+  it("tells debrid sources from other addons", () => {
+    expect(isDebridStream({ name: "Torrentio\n[RD+] 1080p", url: "https://torrentio.strem.fun/realdebrid/x" })).toBe(true);
+    expect(isDebridStream({ name: "[AD download] Comet", url: "https://comet.example/playback/x" })).toBe(true);
+    expect(isDebridStream({ name: "Primer Latino", description: "Prime Video | 1080p | WEB-DL", url: "https://cdn.example/v.mp4" })).toBe(false);
+  });
+
+  it("spots premium-only sources", () => {
+    expect(isLocked({ name: "Primer Latino", description: "Prime Video | 4K\n🔒 Exclusivo Premium Pro" })).toBe(true);
+    expect(isLocked({ name: "Primer Latino", description: "Prime Video | 1080p" })).toBe(false);
+  });
+
+  it("remembers sources that gave a short clip", () => {
+    const s = { name: "Primer Latino", description: "Prime Video | 4K\nx" };
+    expect(gaveShortClip(s)).toBe(false);
+    markShortClip(s);
+    expect(gaveShortClip({ ...s, url: "https://other" })).toBe(true);
+  });
+});
+
+describe("premium-only sources", () => {
+  const addon = { transportUrl: "https://a", manifest: { id: "a", name: "A", version: "1", resources: [], types: [] } } as unknown as AddonRef;
+  const mk = (description: string, i: number) =>
+    parseStream({ name: "Primer Latino", description, url: `https://cdn.example/${i}.mp4` }, addon, 0, i)!;
+
+  it("go after the free ones of the same language, even if they're 4K", () => {
+    const locked4k = mk("Prime Video | 4K | WEB-DL\n🔒 Exclusivo Premium Pro\nLatino", 0);
+    const free1080 = mk("Prime Video | 1080p | WEB-DL\nLatino", 1);
+    expect(sortStreams([locked4k, free1080], "es-419")[0]).toBe(free1080);
+  });
+
+  it("leave an unmarked 4K first", () => {
+    const plain4k = mk("Movie 2160p 4K WEB-DL\nLatino", 0);
+    const plain1080 = mk("Movie 1080p WEB-DL\nLatino", 1);
+    expect(sortStreams([plain4k, plain1080], "es-419")[0]).toBe(plain4k);
   });
 });

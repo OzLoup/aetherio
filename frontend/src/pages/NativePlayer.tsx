@@ -9,7 +9,7 @@ import { useNextEpisode } from "@/hooks/useNextEpisode";
 import { android, type NativeSubtitle } from "@/lib/android";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
-import { isDubbedFor, isMultiAudio, languageOptions, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
+import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
 import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, getSubtitleSync, retimeVtt } from "@/lib/subtitles";
 import type { PlayerState } from "./Streams";
@@ -149,6 +149,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
         void save(e.positionMs, e.durationMs);
       } else if (e.type === "closed") {
         if (e.durationMs > 0 && e.durationMs / 1000 < PLACEHOLDER_MAX_S) {
+          markShortClip(stream);
           setStatus("placeholder");
           return;
         }
@@ -192,7 +193,9 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       {status === "placeholder" && (
         <div className="flex max-w-md flex-col items-center gap-4">
           <p className="text-white/80">
-            {t("Tu debrid todavía está descargando este archivo. Vuelve a intentarlo en unos minutos o elige otro stream.")}
+            {isDebridStream(stream)
+              ? t("Tu debrid todavía está descargando este archivo. Vuelve a intentarlo en unos minutos o elige otro stream.")
+              : t("Esta fuente devolvió un video muy corto, no el episodio o la película. Suele ser un aviso del addon (por ejemplo, que requiere su plan premium). Elige otra fuente.")}
           </p>
           <Button size="lg" autoFocus onClick={() => navigate(-1)}>
             <ListVideo />

@@ -277,3 +277,21 @@ describe("short clips", () => {
     expect(gaveShortClip({ ...s, url: "https://other" })).toBe(true);
   });
 });
+
+describe("premium-only sources", () => {
+  const addon = { transportUrl: "https://a", manifest: { id: "a", name: "A", version: "1", resources: [], types: [] } } as unknown as AddonRef;
+  const mk = (description: string, i: number) =>
+    parseStream({ name: "Primer Latino", description, url: `https://cdn.example/${i}.mp4` }, addon, 0, i)!;
+
+  it("go after the free ones of the same language, even if they're 4K", () => {
+    const locked4k = mk("Prime Video | 4K | WEB-DL\n🔒 Exclusivo Premium Pro\nLatino", 0);
+    const free1080 = mk("Prime Video | 1080p | WEB-DL\nLatino", 1);
+    expect(sortStreams([locked4k, free1080], "es-419")[0]).toBe(free1080);
+  });
+
+  it("leave an unmarked 4K first", () => {
+    const plain4k = mk("Movie 2160p 4K WEB-DL\nLatino", 0);
+    const plain1080 = mk("Movie 1080p WEB-DL\nLatino", 1);
+    expect(sortStreams([plain4k, plain1080], "es-419")[0]).toBe(plain4k);
+  });
+});

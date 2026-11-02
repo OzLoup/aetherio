@@ -186,6 +186,10 @@ export function sortStreams(
     isPlayable(s) ? 0 : 1,
     -languageScore(s, profileLanguage),
     isReady(s) ? 0 : 1,
+    // Needs the addon's own paid plan ("🔒 Exclusivo Premium"), or already
+    // gave a short notice instead of the video: after the ones that play.
+    // Marked by the addon, so a real 4K (e.g. Torrentio) isn't affected.
+    isLocked(s.stream) || gaveShortClip(s.stream) ? 1 : 0,
     overMaxQuality(s, opts.maxQuality) ? 1 : 0,
     // Same language: a single-language file beats a multi-audio one —
     // except in the app, which picks the right track inside the file.

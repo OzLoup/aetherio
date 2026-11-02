@@ -149,6 +149,7 @@ export const en: Record<string, string> = {
   "Siguiente episodio": "Next episode",
   "Buscando la mejor fuente…": "Finding the best source…",
   "Elegir yo": "Let me choose",
+  "Capítulos": "Episodes",
   "Esta fuente devolvió un video muy corto": "This source returned a very short video",
   "Dura menos de un minuto y medio, así que no parece el episodio o la película. Suele ser un aviso del addon (por ejemplo, que la fuente requiere su plan premium) o una vista previa.": "It's under a minute and a half, so it doesn't look like the episode or movie. It's usually a notice from the addon (for example, that the source needs its premium plan) or a preview.",
   "Elegir otra fuente": "Pick another source",

@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     addon_fetch_timeout_seconds: float = 10.0
     addon_manifest_max_bytes: int = 1_000_000
 
+    # Own catalogs (/stremio/tmdb/...): free key from themoviedb.org → Settings
+    # → API ("API Read Access Token" or the v3 "API Key"). Empty = disabled.
+    tmdb_api_key: str = ""
+
     # Max profiles per account (Netflix uses 5).
     max_profiles_per_user: int = 5
 

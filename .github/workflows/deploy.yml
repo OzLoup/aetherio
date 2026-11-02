@@ -53,7 +53,7 @@ jobs:
           gcloud run deploy $SERVICE \
             --image $IMAGE:${{ github.sha }} \
             --region $GCP_REGION --project $GCP_PROJECT --allow-unauthenticated \
-            --set-secrets DATABASE_URL=aetherio-database-url:latest,JWT_SECRET=aetherio-jwt-secret:latest,DATA_ENCRYPTION_KEY=aetherio-data-key:latest,GOOGLE_CLIENT_ID=aetherio-google-client-id:latest,GOOGLE_CLIENT_SECRET=aetherio-google-client-secret:latest \
+            --set-secrets DATABASE_URL=aetherio-database-url:latest,JWT_SECRET=aetherio-jwt-secret:latest,DATA_ENCRYPTION_KEY=aetherio-data-key:latest,GOOGLE_CLIENT_ID=aetherio-google-client-id:latest,GOOGLE_CLIENT_SECRET=aetherio-google-client-secret:latest,TMDB_API_KEY=aetherio-tmdb-key:latest \
             --set-env-vars ENVIRONMENT=production,SESSION_HTTPS_ONLY=true,ADDON_ALLOW_PRIVATE_HOSTS=false,FRONTEND_URL=${{ vars.FRONTEND_URL }},GOOGLE_REDIRECT_URI=${{ vars.BACKEND_URL }}/auth/google/callback
 
   frontend:

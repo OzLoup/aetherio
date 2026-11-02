@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getErrorDetail } from "@/api/client";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { OwnCatalogs } from "@/components/addons/OwnCatalogs";
 import { useAddons } from "@/hooks/useAddons";
 import { SUGGESTED_ADDONS } from "@/lib/suggestedAddons";
 import { t } from "@/i18n";
@@ -59,6 +60,9 @@ export function SuggestedAddons() {
         ))}
       </ul>
       {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="w-full max-w-lg text-left">
+        <OwnCatalogs />
+      </div>
       <Link to="/addons" className={buttonVariants({ variant: "outline" })}>
         {t("Instalar otro addon")}
       </Link>

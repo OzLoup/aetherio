@@ -2,7 +2,9 @@ import { Loader2, Plus, Puzzle } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AddonCard } from "@/components/addons/AddonCard";
+import { CommunityAddons } from "@/components/addons/CommunityAddons";
 import { InstallAddonDialog } from "@/components/addons/InstallAddonDialog";
+import { OwnCatalogs } from "@/components/addons/OwnCatalogs";
 import { Button } from "@/components/ui/button";
 import { useAddons } from "@/hooks/useAddons";
 import { t } from "@/i18n";
@@ -14,9 +16,12 @@ export default function Addons() {
   const [params, setParams] = useSearchParams();
   const installParam = params.get("install") ?? undefined;
   const [dialogOpen, setDialogOpen] = useState(Boolean(installParam));
+  // Picked from the community directory.
+  const [pickedUrl, setPickedUrl] = useState<string | undefined>();
 
   function handleDialogChange(open: boolean) {
     setDialogOpen(open);
+    if (!open) setPickedUrl(undefined);
     if (!open && installParam) {
       params.delete("install");
       setParams(params, { replace: true });
@@ -37,6 +42,8 @@ export default function Addons() {
           {t("Instalar addon")}
         </Button>
       </div>
+
+      <OwnCatalogs />
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -69,10 +76,17 @@ export default function Addons() {
         </div>
       )}
 
+      <CommunityAddons
+        onInstall={(url) => {
+          setPickedUrl(url);
+          setDialogOpen(true);
+        }}
+      />
+
       <InstallAddonDialog
         open={dialogOpen}
         onOpenChange={handleDialogChange}
-        initialUrl={installParam}
+        initialUrl={pickedUrl ?? installParam}
         preview={preview}
         install={install}
       />

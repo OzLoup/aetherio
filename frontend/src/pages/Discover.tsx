@@ -49,11 +49,16 @@ export default function Discover() {
   // Addons have no standard "sort" option: sort what's loaded, here.
   const sortParam = params.get("sort") ?? "";
   const sort: CatalogSort = sortParam === "az" || sortParam === "recent" ? sortParam : "";
+  // Catalogs that sort on their server (the own ones: whole catalog, not
+  // just what's loaded) declare a "sort" extra with these values.
+  const serverSort = Boolean(
+    sort && selected?.catalog.extra?.some((e) => e.name === "sort" && (!e.options || e.options.includes(sort))),
+  );
 
   const [items, setItems] = useState<MetaPreview[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "more" | "error">("idle");
   const [hasMore, setHasMore] = useState(false);
-  const sorted = useMemo(() => sortMetas(items, sort), [items, sort]);
+  const sorted = useMemo(() => (serverSort ? items : sortMetas(items, sort)), [items, sort, serverSort]);
   const requestId = useRef(0);
 
   async function load(skip: number) {
@@ -63,6 +68,7 @@ export default function Discover() {
     const extra: Extra = {};
     if (genre) extra.genre = genre;
     if (skip) extra.skip = String(skip);
+    if (serverSort) extra.sort = sort;
     try {
       const page = await getCatalog(selected.addon, selected.catalog.type, selected.catalog.id, extra);
       if (id !== requestId.current) return; // filters changed meanwhile
@@ -78,7 +84,9 @@ export default function Discover() {
     }
   }
 
-  const selectionKey = selected ? `${selected.addon.id}|${selected.catalog.type}|${selected.catalog.id}|${genre}` : "";
+  const selectionKey = selected
+    ? `${selected.addon.id}|${selected.catalog.type}|${selected.catalog.id}|${genre}|${serverSort ? sort : ""}`
+    : "";
   useEffect(() => {
     setItems([]);
     setHasMore(false);
@@ -168,7 +176,7 @@ export default function Discover() {
         <p className="py-16 text-center text-sm text-muted-foreground">{t("No hay nada aquí con estos filtros.")}</p>
       ) : (
         <>
-          {sort && hasMore && (
+          {sort && !serverSort && hasMore && (
             <p className="-mb-2 text-xs text-muted-foreground">
               {t("Ordenados los {n} títulos cargados. \"Cargar más\" agrega más y los reordena.", { n: items.length })}
             </p>

@@ -2,8 +2,9 @@
 # file names so the README links (releases/latest/download/…) always point
 # at the newest version.
 #
-# Start it by pushing a tag (git tag v0.2.0 && git push origin v0.2.0) or by
-# hand: Actions → Release → Run workflow, with the version.
+# Start it by creating a release on GitHub (Releases → Draft a new release,
+# with a new v* tag), by pushing a tag (git tag v0.2.0 && git push origin
+# v0.2.0) or by hand: Actions → Release → Run workflow, with the version.
 name: Release
 
 on:
@@ -111,7 +112,14 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        # A release made by hand on GitHub (which also creates the tag and
+        # starts this run) only gets the files; otherwise it's created here.
         run: |
-          gh release create "$TAG" AetherIO.apk AetherIO-Setup.exe AetherIO-mac.dmg \
-            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
-            --title "AetherIO $TAG" --generate-notes --latest
+          FILES="AetherIO.apk AetherIO-Setup.exe AetherIO-mac.dmg"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" $FILES --repo "$REPO" --target "${{ github.sha }}" \
+              --title "AetherIO $TAG" --generate-notes --latest
+          fi

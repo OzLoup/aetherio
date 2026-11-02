@@ -65,6 +65,20 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- Where the bar is being moved to (touch drag or remote). -->
+    <TextView
+        android:id="@+id/scrub_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/top_button"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="10dp"
+        android:textColor="@android:color/white"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Same, big, during the last minute (credits) and when it ends. -->
     <Button
         android:id="@+id/next_overlay"

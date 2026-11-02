@@ -32,7 +32,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners already ship the Android SDK (ANDROID_HOME).
       # Same key as the APK already installed, so it updates in place.
       # Without these secrets the APK uses a throwaway debug key.
       - name: Signing key
@@ -73,7 +73,8 @@ jobs:
         run: |
           npm ci --prefix frontend
           cd desktop && npm ci
-          npm run dist:win:prod -- --publish never
+          test -n "$VITE_API_BASE_URL" || { echo "Set the BACKEND_URL variable"; exit 1; }
+          npm run dist:win -- --publish never
           mv dist/AetherIO-Setup-*.exe ../AetherIO-Setup.exe
       - uses: actions/upload-artifact@v4
         with:

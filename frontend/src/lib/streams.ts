@@ -327,3 +327,57 @@ export function lighterOption(options: QualityOption[]) {
     null
   );
 }
+
+// --- short clips instead of the video --------------------------------------
+
+const DEBRID_WORDS =
+  /real-?debrid|all-?debrid|premiumize|debrid-?link|torbox|easydebrid|offcloud|\bdebrid\b|\[(RD|AD|PM|TB|DL|ED|OC)\b|\b(RD|AD|PM|TB|DL|ED|OC)\s*(\+|⚡|⬇|⏳|download)/i;
+
+/** Played through a debrid service (Torrentio, Comet, MediaFusion… with a
+ * debrid account). Only those hand out a short "downloading" clip while the
+ * service fetches the torrent; other addons' short clips are something else. */
+export function isDebridStream(s: Stream) {
+  const text = `${s.name ?? ""}\n${s.description ?? s.title ?? ""}\n${s.url ?? ""}`;
+  return DEBRID_WORDS.test(text) || detectCached(s.name ?? "") !== null;
+}
+
+/** The addon says it needs its own paid plan ("🔒 Exclusivo Premium"):
+ * without it, it usually serves a short notice instead of the video. */
+export function isLocked(s: Stream) {
+  return /🔒|exclusiv[oa]s?\s+(para\s+)?premium|premium\s+only|solo\s+(para\s+)?premium|requires?\s+premium/i.test(
+    `${s.name ?? ""}\n${s.description ?? s.title ?? ""}`,
+  );
+}
+
+const SHORT_KEY = "aetherio.shortClips";
+
+/** Same source across episodes: addon label + first line of its details. */
+function clipKey(s: Stream) {
+  return `${s.name ?? ""}|${(s.description ?? s.title ?? "").split("\n")[0]}`;
+}
+
+// Also kept in memory, for when storage is blocked.
+let memoryClips: string[] = [];
+
+function shortClips(): string[] {
+  try {
+    return JSON.parse(sessionStorage.getItem(SHORT_KEY) ?? "[]");
+  } catch {
+    return memoryClips;
+  }
+}
+
+/** Remember (this session) a source that gave a short clip, so automatic
+ * picks (next episode) don't land on it again. */
+export function markShortClip(s: Stream) {
+  try {
+    memoryClips = [...shortClips().filter((k) => k !== clipKey(s)), clipKey(s)].slice(-50);
+    sessionStorage.setItem(SHORT_KEY, JSON.stringify(memoryClips));
+  } catch {
+    // storage blocked: nothing to remember
+  }
+}
+
+export function gaveShortClip(s: Stream) {
+  return shortClips().includes(clipKey(s));
+}

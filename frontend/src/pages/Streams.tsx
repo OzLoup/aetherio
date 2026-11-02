@@ -15,7 +15,7 @@ import { playerPath, progressContextFrom } from "@/lib/routes";
 import { android } from "@/lib/android";
 import { mediaSupport } from "@/lib/browser";
 import { openInVlc, vlcAvailable } from "@/lib/vlc";
-import { isDubbedFor, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
+import { gaveShortClip, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
 import { addonsFor, getStreams, type AddonResult, type Stream } from "@/lib/stremio";
@@ -170,6 +170,10 @@ export default function Streams() {
         (s.kind === "direct" || s.kind === "hls") &&
         s.cached !== false &&
         !s.incompatible &&
+        // Premium-only sources and ones that gave a short clip this session
+        // would just show a notice instead of the episode.
+        !isLocked(s.stream) &&
+        !gaveShortClip(s.stream) &&
         (!hasMyLanguage || isDubbedFor(s.languages, language)),
     );
     if (best) void play(best, { replace: true });

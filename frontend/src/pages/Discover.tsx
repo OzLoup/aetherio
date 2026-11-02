@@ -6,6 +6,7 @@ import { SuggestedAddons } from "@/components/catalog/SuggestedAddons";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { sortMetas, type CatalogSort } from "@/lib/meta";
 import { useAddons } from "@/hooks/useAddons";
 import { typeLabel } from "@/lib/labels";
 import { catalogExtraNames, genreOptions, hideAdult, getCatalog, isDebridLibraryCatalog, requiredExtraNames, type Extra, type MetaPreview } from "@/lib/stremio";
@@ -45,10 +46,14 @@ export default function Discover() {
   const genreParam = params.get("genre") ?? "";
   const genre = genres.includes(genreParam) ? genreParam : genreRequired ? (genres[0] ?? "") : "";
   const canPage = selected ? catalogExtraNames(selected.catalog).includes("skip") : false;
+  // Addons have no standard "sort" option: sort what's loaded, here.
+  const sortParam = params.get("sort") ?? "";
+  const sort: CatalogSort = sortParam === "az" || sortParam === "recent" ? sortParam : "";
 
   const [items, setItems] = useState<MetaPreview[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "more" | "error">("idle");
   const [hasMore, setHasMore] = useState(false);
+  const sorted = useMemo(() => sortMetas(items, sort), [items, sort]);
   const requestId = useRef(0);
 
   async function load(skip: number) {
@@ -83,7 +88,7 @@ export default function Discover() {
   }, [selectionKey]);
 
   function setFilter(next: Record<string, string>) {
-    const merged = { type, addon: String(selected?.addon.id ?? ""), catalog: selected?.catalog.id ?? "", genre, ...next };
+    const merged = { type, addon: String(selected?.addon.id ?? ""), catalog: selected?.catalog.id ?? "", genre, sort, ...next };
     setParams(Object.fromEntries(Object.entries(merged).filter(([, v]) => v)), { replace: true });
   }
 
@@ -100,7 +105,7 @@ export default function Discover() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">{t("Descubrir")}</h1>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="f-type">{t("Tipo")}</Label>
           <NativeSelect id="f-type" value={type} onChange={(e) => setFilter({ type: e.target.value, addon: "", catalog: "", genre: "" })}>
@@ -139,6 +144,14 @@ export default function Discover() {
             ))}
           </NativeSelect>
         </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="f-sort">{t("Ordenar")}</Label>
+          <NativeSelect id="f-sort" value={sort} onChange={(e) => setFilter({ sort: e.target.value })}>
+            <option value="">{t("Del catálogo")}</option>
+            <option value="az">{t("A–Z")}</option>
+            <option value="recent">{t("Más recientes")}</option>
+          </NativeSelect>
+        </div>
       </div>
 
       {status === "loading" ? (
@@ -155,7 +168,12 @@ export default function Discover() {
         <p className="py-16 text-center text-sm text-muted-foreground">{t("No hay nada aquí con estos filtros.")}</p>
       ) : (
         <>
-          <PosterGrid items={items} />
+          {sort && hasMore && (
+            <p className="-mb-2 text-xs text-muted-foreground">
+              {t("Ordenados los {n} títulos cargados. \"Cargar más\" agrega más y los reordena.", { n: items.length })}
+            </p>
+          )}
+          <PosterGrid items={sorted} />
           {(hasMore || status === "error") && (
             <div className="flex justify-center">
               <Button variant="outline" size="lg" onClick={() => load(items.length)} disabled={status === "more"}>

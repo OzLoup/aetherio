@@ -355,12 +355,18 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
     return () => window.clearTimeout(timer);
   }, [syncNote]);
 
+  const trackEls = useRef<(HTMLTrackElement | null)[]>([]);
+  const shownTrack = useRef<TextTrack | null>(null);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    Array.from(video.textTracks).forEach((item, i) => {
-      item.mode = i === activeTrack ? "showing" : "disabled";
+    if (shownTrack.current) shownTrack.current.mode = "disabled";
+    Array.from(video.textTracks).forEach((item) => {
+      item.mode = "disabled";
     });
+    const next = activeTrack >= 0 ? (trackEls.current[activeTrack]?.track ?? null) : null;
+    if (next) next.mode = "showing";
+    shownTrack.current = next;
   }, [activeTrack, trackSrcs]);
 
   // Subtitles inside the file (desktop app). Extracting them reads the whole
@@ -735,7 +741,12 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         onEnded={() => progressSaver.saveNow()}
       >
         {tracks.map((item, i) => (
-          <track key={`${item.id}@${desk.offset}@${subSync.offset}@${subSync.scale}`} kind="subtitles" label={item.label} srcLang={item.srclang} src={trackSrcs[i]} />
+          <track
+            ref={(el) => {
+              trackEls.current[i] = el;
+            }}
+            key={`${item.id}@${desk.offset}@${subSync.offset}@${subSync.scale}`}
+            kind="subtitles" label={item.label} srcLang={item.srclang} src={trackSrcs[i]} />
         ))}
       </video>
 

@@ -8,6 +8,24 @@ Funciona como **web**, **app de macOS** y **app de Android** (TV y celular, un s
 local (ffmpeg) que reproduce lo que el navegador no puede: audio AC3/DTS, elegir la pista de
 audio de un archivo, MKV/HEVC, subtítulos internos y transmitir a la TV.
 
+## Descargas
+
+Última versión (un clic y se descarga):
+
+| Plataforma | Descarga |
+|---|---|
+| **Android / Android TV** | [⬇ AetherIO.apk](https://github.com/OzLoup/aetherio/releases/latest/download/AetherIO.apk) |
+| **Windows** (64 bits) | [⬇ AetherIO-Setup.exe](https://github.com/OzLoup/aetherio/releases/latest/download/AetherIO-Setup.exe) |
+| **macOS** (Apple Silicon) | [⬇ AetherIO-mac.dmg](https://github.com/OzLoup/aetherio/releases/latest/download/AetherIO-mac.dmg) |
+| **Web** | [aetherio-2y3.pages.dev](https://aetherio-2y3.pages.dev) |
+
+Versiones anteriores y notas de cambios: [Releases](https://github.com/OzLoup/aetherio/releases).
+Windows avisa con SmartScreen y macOS con Gatekeeper porque las apps no están firmadas por una
+autoridad: en Windows "Más información → Ejecutar de todas formas"; en macOS, clic derecho → Abrir.
+
+Para publicar una versión nueva: `git tag v0.2.0 && git push origin v0.2.0` (o Actions → Release →
+Run workflow). El workflow `.github/workflows/release.yml` compila los tres instaladores y los sube.
+
 > AetherIO no aloja, no distribuye y **no recomienda** contenido, addons ni listas: no trae nada
 > preinstalado salvo los addons oficiales de metadatos y subtítulos. Todo lo que se reproduce viene
 > de las fuentes que cada usuario agrega bajo su propia responsabilidad (ver `/legal` en la app).

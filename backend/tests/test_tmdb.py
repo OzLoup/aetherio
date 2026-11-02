@@ -87,3 +87,30 @@ def test_catalog_endpoint_parses_extras(client, monkeypatch):
     assert res.status_code == 200 and res.headers["access-control-allow-origin"] == "*"
     assert res.json()["metas"][0]["id"] == "tt1"
     assert seen["extra"] == {"genre": "Acción", "skip": "20"}
+
+
+def test_similar_uses_recommendations_then_similar(monkeypatch):
+    calls = []
+
+    async def fake_get(path, **params):
+        calls.append((path, params.get("language")))
+        if path.startswith("/find/"):
+            return {"movie_results": [{"id": 10}]}
+        if path.endswith("/recommendations"):
+            return {"results": []}  # none: falls back to /similar
+        return {"results": [{"id": 10, "title": "Itself"}, {"id": 11, "title": "Otra"}]}
+
+    async def fake_ids(kind, ids):
+        return {11: "tt11"}
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    monkeypatch.setattr(tmdb, "imdb_ids", fake_ids)
+    metas = asyncio.run(tmdb.similar("movie", "tt1", "es-419"))
+    assert [m["id"] for m in metas] == ["tt11"]  # the title itself is left out
+    assert calls[-1] == ("/movie/10/similar", "es-MX")
+
+
+def test_similar_endpoint_empty_when_off(client, monkeypatch):
+    monkeypatch.setattr(settings, "tmdb_api_key", "")
+    res = client.get("/stremio/tmdb/similar/movie/tt1.json")
+    assert res.status_code == 200 and res.json() == {"metas": []}

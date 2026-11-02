@@ -25,6 +25,7 @@ import {
 import { streamsPath } from "@/lib/routes";
 import { MyListButton } from "@/components/catalog/MyListButton";
 import { RatingButtons } from "@/components/catalog/RatingButtons";
+import { SimilarRow } from "@/components/catalog/SimilarRow";
 import { getMeta, type MetaDetail, type Video } from "@/lib/stremio";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -210,6 +211,10 @@ function DetailView({ meta, source, onBack }: { meta: MetaDetail; source?: strin
           <Episodes meta={meta} videos={meta.videos!} progress={progress} />
         </ScrollReveal>
       )}
+
+      <ScrollReveal>
+        <SimilarRow type={meta.type} id={meta.id} />
+      </ScrollReveal>
     </div>
   );
 }

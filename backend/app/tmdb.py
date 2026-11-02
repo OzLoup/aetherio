@@ -259,3 +259,33 @@ async def catalog(country: str, type_: str, catalog_id: str, extra: dict[str, st
     items = [i for i in data.get("results", []) if i.get("id")]
     ids = await imdb_ids(kind, [i["id"] for i in items])
     return [to_meta(i, type_, ids[i["id"]]) for i in items if i["id"] in ids]
+
+
+# --- similar titles (detail page) ------------------------------------------------
+
+# Profile language → TMDB language.
+LANGUAGES = {"es-419": "es-MX", "es-ES": "es-ES", "en": "en-US", "pt-BR": "pt-BR"}
+SIMILAR_MAX = 20
+
+
+async def similar(type_: str, imdb_id: str, language: str) -> list[dict]:
+    """Titles like this one: TMDB's recommendations (what people who liked it
+    watched), or its "similar" list (same genres/keywords) when there are none."""
+    kind = KINDS.get(type_)
+    if not kind or not imdb_id.startswith("tt"):
+        return []
+    lang = LANGUAGES.get(language, language if len(language) == 5 else "es-MX")
+    found = await _get(f"/find/{imdb_id}", external_source="imdb_id", language=lang)
+    matches = found.get(f"{kind}_results") or []
+    if not matches:
+        return []
+    tmdb_id = matches[0]["id"]
+    items: list[dict] = []
+    for path in (f"/{kind}/{tmdb_id}/recommendations", f"/{kind}/{tmdb_id}/similar"):
+        data = await _get(path, language=lang, page=1)
+        items = [i for i in data.get("results", []) if i.get("id") and i["id"] != tmdb_id]
+        if items:
+            break
+    items = items[:SIMILAR_MAX]
+    ids = await imdb_ids(kind, [i["id"] for i in items])
+    return [to_meta(i, type_, ids[i["id"]]) for i in items if i["id"] in ids]

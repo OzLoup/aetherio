@@ -149,6 +149,7 @@ export const en: Record<string, string> = {
   "Siguiente episodio": "Next episode",
   "Buscando la mejor fuente…": "Finding the best source…",
   "Elegir yo": "Let me choose",
+  "Títulos similares": "More like this",
   "Catálogos de Netflix, HBO Max, Disney+, Prime Video y Apple TV+ (addon de la comunidad).": "Netflix, HBO Max, Disney+, Prime Video and Apple TV+ catalogs (community addon).",
   "Ver más": "Show more",
   "Pide configurarlo en su página. Al terminar, copia el enlace de instalación y pégalo en \"Instalar addon\".": "It needs to be set up on its page. When done, copy the install link and paste it in \"Install addon\".",

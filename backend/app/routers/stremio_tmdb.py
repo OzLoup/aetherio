@@ -35,6 +35,19 @@ def countries():
     )
 
 
+@router.get("/similar/{type_}/{imdb_id}.json")
+async def similar(type_: str, imdb_id: str, lang: str = "es-419"):
+    """"Títulos similares" on a detail page. Empty when the catalogs are off
+    or TMDB doesn't know the title (the page then hides the row)."""
+    if not tmdb.enabled():
+        return JSONResponse({"metas": []}, headers=HEADERS)
+    try:
+        metas = await tmdb.similar(type_, imdb_id, lang)
+    except tmdb.TmdbError:
+        metas = []
+    return JSONResponse({"metas": metas}, headers=HEADERS)
+
+
 @router.get("/{country}/manifest.json")
 async def manifest(country: str):
     name, language = _check(country)

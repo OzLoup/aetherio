@@ -163,7 +163,17 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Only web links: the page is the only caller, but an addon decides
+     * some of these URLs, and intent:/file:/content: ones could reach other
+     * apps or local files. */
+    static boolean isWebUrl(String url) {
+        if (url == null) return false;
+        String scheme = Uri.parse(url).getScheme();
+        return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+    }
+
     private void openExternal(String url) {
+        if (!isWebUrl(url)) return;
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         } catch (ActivityNotFoundException e) {
@@ -230,6 +240,8 @@ public class MainActivity extends Activity {
         public void play(String requestJson) {
             try {
                 JSONObject req = new JSONObject(requestJson);
+                // The native player opens web streams only (never local files).
+                if (!isWebUrl(req.optString("url"))) throw new IllegalArgumentException("Solo se pueden reproducir enlaces http/https");
                 JSONArray subs = req.optJSONArray("subtitles");
                 JSONArray files = new JSONArray();
                 File dir = new File(getCacheDir(), "subtitles");

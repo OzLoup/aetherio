@@ -196,3 +196,16 @@ class Rating(Base):
     )
 
     profile: Mapped["Profile"] = relationship(back_populates="ratings")
+
+
+class TmdbId(Base):
+    """TMDB → IMDb id, for the own catalogs: streams addons (Torrentio…)
+    look titles up by IMDb id. imdb_id is null when TMDB has none (checked
+    again after a while, see app/tmdb.py)."""
+
+    __tablename__ = "tmdb_ids"
+
+    kind: Mapped[str] = mapped_column(String(6), primary_key=True)  # movie | tv
+    tmdb_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    imdb_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

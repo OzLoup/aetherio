@@ -157,7 +157,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
       const h = headerArg(headers);
       if (h) args.push("-headers", h);
       args.push(url);
-      const p = spawn(ffprobePath, args);
+      const p = track(spawn(ffprobePath, args));
       let out = "";
       let err = "";
       const timer = setTimeout(() => p.kill("SIGKILL"), PROBE_TIMEOUT_MS);
@@ -186,7 +186,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
       const h = headerArg(headers);
       if (h) args.push("-headers", h);
       args.push("-read_intervals", `${from}%${ss + 0.5}`, "-show_entries", "frame=best_effort_timestamp_time,pts_time", "-of", "json", url);
-      const p = spawn(ffprobePath, args);
+      const p = track(spawn(ffprobePath, args));
       let out = "";
       const timer = setTimeout(() => p.kill("SIGKILL"), PROBE_TIMEOUT_MS);
       p.stdout.on("data", (d) => (out += d));
@@ -204,6 +204,15 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
     });
   }
 
+  // Every ffmpeg/ffprobe running, to stop them all when the app closes: an
+  // orphan would keep reading the source (and holding its session open).
+  const children = new Set();
+  function track(p) {
+    children.add(p);
+    p.on("close", () => children.delete(p));
+    return p;
+  }
+
   function sendJson(res, status, body) {
     res.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
     res.end(JSON.stringify(body));
@@ -214,7 +223,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
    * link) becomes a real error instead of an empty 200. */
   function pipeFfmpeg(req, res, args, contentType) {
     log.info?.("[media] ffmpeg", args.filter((a) => !a.includes("\r\n")).join(" ").replace(/https?:\/\/\S+/, "<url>"));
-    const p = spawn(ffmpegPath, args);
+    const p = track(spawn(ffmpegPath, args));
     let stderr = "";
     p.stderr.on("data", (d) => (stderr += d));
     p.stdout.once("data", (first) => {
@@ -303,7 +312,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
     }
     log.info?.("[cast] TV fetching", m[1], cast.format, "from", cast.start, "s");
     const args = streamArgs(cast);
-    const p = spawn(ffmpegPath, args);
+    const p = track(spawn(ffmpegPath, args));
     let stderr = "";
     p.stderr.on("data", (d) => (stderr += d));
     p.stdout.once("data", (first) => {
@@ -342,9 +351,22 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
             return { url: `${base}/media`, subtitlesUrl: vtt ? `${base}/subs.vtt` : null, contentType: format === "mpegts" ? "video/mp2t" : "video/mp4" };
           },
           clearCasts: () => casts.clear(),
+          /** Cut every stream now: ffmpeg processes and open connections
+           * (the server keeps running for the next video). */
+          stopAll: () => {
+            for (const p of children) p.kill("SIGKILL");
+            children.clear();
+            casts.clear();
+            server.closeAllConnections();
+            lan.closeAllConnections();
+          },
           close: () => {
+            for (const p of children) p.kill("SIGKILL");
+            children.clear();
             server.close();
             lan.close();
+            server.closeAllConnections();
+            lan.closeAllConnections();
           },
         });
       });

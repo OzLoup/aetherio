@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import check_production, settings
-from app.routers import addons, auth, library, playlists, profiles, progress, ratings
+from app.routers import addons, auth, library, playlists, profiles, progress, ratings, stremio_tmdb
 
 if settings.environment == "production" and (problems := check_production(settings)):
     raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
@@ -35,6 +35,7 @@ app.include_router(progress.router)
 app.include_router(playlists.router)
 app.include_router(library.router)
 app.include_router(ratings.router)
+app.include_router(stremio_tmdb.router)
 
 
 @app.get("/health")

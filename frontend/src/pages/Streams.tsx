@@ -1,14 +1,15 @@
-import { ArrowLeft, Loader2, RotateCw } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { StreamCard } from "@/components/streams/StreamCard";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { useProfiles } from "@/context/ProfileContext";
 import { useAddons } from "@/hooks/useAddons";
+import { useAdjacentEpisodes } from "@/hooks/useNextEpisode";
 import { languageInfo } from "@/lib/languages";
 import { getVideoProgress, resumePoint, type ProgressContext } from "@/api/progress";
 import { playerPath, progressContextFrom } from "@/lib/routes";
@@ -62,6 +63,8 @@ export default function Streams() {
   const langLabel = t(languageInfo(language).label);
 
   const sources = useMemo(() => addonsFor(active, "stream", type, id), [active, type, id]);
+  // Series: jump to the episode before/after without going back to the list.
+  const adjacent = useAdjacentEpisodes(active, type, progress);
   const [results, setResults] = useState<AddonResult<Stream>[]>([]);
   const [attempt, setAttempt] = useState(0);
   const [onlyMyLanguage, setOnlyMyLanguage] = useState<boolean | null>(null);
@@ -237,6 +240,25 @@ export default function Streams() {
           {t("Volver")}
         </Button>
         <h1 className="text-2xl font-bold tracking-tight">{title || "Elegir stream"}</h1>
+        {(adjacent?.previous || adjacent?.next) && (
+          <nav className="flex flex-wrap gap-2" aria-label={t("Capítulos")}>
+            {adjacent.previous && (
+              // replace: "Volver" still goes back to the series page.
+              <Link to={adjacent.previous.href} replace className={buttonVariants({ variant: "outline", size: "sm" })} title={adjacent.previous.title}>
+                <ChevronLeft />
+                {t("Anterior")}
+                <span className="text-muted-foreground">{adjacent.previous.code}</span>
+              </Link>
+            )}
+            {adjacent.next && (
+              <Link to={adjacent.next.href} replace className={buttonVariants({ variant: "outline", size: "sm" })} title={adjacent.next.title}>
+                {t("Siguiente")}
+                <span className="text-muted-foreground">{adjacent.next.code}</span>
+                <ChevronRight />
+              </Link>
+            )}
+          </nav>
+        )}
       </div>
 
       {!addonsLoading && sources.length === 0 ? (

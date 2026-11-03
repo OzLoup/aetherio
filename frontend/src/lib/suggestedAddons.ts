@@ -1,5 +1,6 @@
 /** Shown as one-click suggestions when a profile has no catalogs. Nothing is
- * installed automatically. Only official, non-torrent addons here. */
+ * installed automatically. Only metadata/subtitle addons here (no streams,
+ * no torrents). The own TMDB catalogs are offered by <OwnCatalogs />. */
 export const SUGGESTED_ADDONS = [
   {
     name: "Cinemeta",
@@ -10,5 +11,10 @@ export const SUGGESTED_ADDONS = [
     name: "OpenSubtitles v3",
     description: "Subtítulos en muchos idiomas.",
     url: "https://opensubtitles-v3.strem.io/manifest.json",
+  },
+  {
+    name: "Streaming Catalogs",
+    description: "Catálogos de Netflix, HBO Max, Disney+, Prime Video y Apple TV+ (addon de la comunidad).",
+    url: "https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club/manifest.json",
   },
 ];

@@ -24,6 +24,7 @@ Generar una vez y guardar en Google Secret Manager (nunca en el repo):
 | `aetherio-jwt-secret` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `aetherio-data-key` | `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` — **no cambiarla después** |
 | `aetherio-google-client-id` / `aetherio-google-client-secret` | Paso 4 |
+| `aetherio-tmdb-key` | Clave gratuita de themoviedb.org → Configuración → API (catálogos propios). Cloud Run necesita que exista, aunque esté vacía |
 
 ```bash
 echo -n "VALOR" | gcloud secrets create aetherio-jwt-secret --data-file=- --project PROYECTO
@@ -38,7 +39,7 @@ cd backend
 docker buildx build --platform linux/amd64 -t us-central1-docker.pkg.dev/PROYECTO/aetherio/aetherio-backend:latest --push .
 gcloud run deploy aetherio-backend --image us-central1-docker.pkg.dev/PROYECTO/aetherio/aetherio-backend:latest \
   --region us-central1 --allow-unauthenticated \
-  --set-secrets DATABASE_URL=aetherio-database-url:latest,JWT_SECRET=aetherio-jwt-secret:latest,DATA_ENCRYPTION_KEY=aetherio-data-key:latest,GOOGLE_CLIENT_ID=aetherio-google-client-id:latest,GOOGLE_CLIENT_SECRET=aetherio-google-client-secret:latest \
+  --set-secrets DATABASE_URL=aetherio-database-url:latest,JWT_SECRET=aetherio-jwt-secret:latest,DATA_ENCRYPTION_KEY=aetherio-data-key:latest,GOOGLE_CLIENT_ID=aetherio-google-client-id:latest,GOOGLE_CLIENT_SECRET=aetherio-google-client-secret:latest,TMDB_API_KEY=aetherio-tmdb-key:latest \
   --set-env-vars ENVIRONMENT=production,SESSION_HTTPS_ONLY=true,ADDON_ALLOW_PRIVATE_HOSTS=false,FRONTEND_URL=https://aetherio.pages.dev,GOOGLE_REDIRECT_URI=https://BACKEND/auth/google/callback
 ```
 Con `ENVIRONMENT=production` el backend **no arranca** si falta un secreto o queda algo

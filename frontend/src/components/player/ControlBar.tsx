@@ -1,5 +1,5 @@
 import { Pause, Play, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { Playback } from "@/hooks/usePlayback";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -49,9 +49,53 @@ interface ControlBarProps {
   right: ReactNode;
 }
 
+// How long the bar trusts a requested position before showing the real one
+// again (the Mac/Windows app may re-prepare the video from that point).
+const PENDING_MS = 30_000;
+
 export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, onVolume, onToggleMute, right }: ControlBarProps) {
-  const { paused, currentTime, duration, buffered, volume, muted } = playback;
+  const { paused, duration, buffered, volume, muted } = playback;
+  // Where we asked to go: shown right away instead of waiting for the video.
+  const [pending, setPending] = useState<{ to: number; at: number } | null>(null);
+  // Dragging the bar: preview only, the jump happens on release.
+  const [drag, setDrag] = useState<number | null>(null);
+  const dragging = useRef(false);
+  // Pointer over the bar: the time under it.
+  const [hover, setHover] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!pending) return;
+    // The video got there (or it's taking too long): show the real time again.
+    const arrived = Math.abs(playback.currentTime - pending.to) < 3;
+    const wait = arrived ? 0 : Math.max(0, pending.at + PENDING_MS - Date.now());
+    const timer = window.setTimeout(() => setPending(null), wait);
+    return () => window.clearTimeout(timer);
+  }, [pending, playback.currentTime]);
+
+  function seekTo(seconds: number) {
+    const to = Math.max(0, Math.min(duration || seconds, seconds));
+    setPending({ to, at: Date.now() });
+    onSeek(to);
+  }
+
+  const currentTime = drag ?? pending?.to ?? playback.currentTime;
+  const seekingNow = pending !== null && drag === null;
   const pct = duration ? (currentTime / duration) * 100 : 0;
+  const preview = drag ?? hover;
+  const previewPct = duration && preview !== null ? Math.min(100, Math.max(0, (preview / duration) * 100)) : 0;
+
+  function timeAt(e: ReactPointerEvent<HTMLElement>) {
+    const box = e.currentTarget.getBoundingClientRect();
+    const share = box.width ? Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)) : 0;
+    return share * duration;
+  }
+
+  function endDrag() {
+    if (!dragging.current) return;
+    dragging.current = false;
+    if (drag !== null) seekTo(drag);
+    setDrag(null);
+  }
   const bufferedPct = duration ? Math.min(100, (buffered / duration) * 100) : 0;
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
@@ -68,13 +112,29 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
         {formatTime(currentTime)} <span className="text-white/50">/ {formatTime(duration)}</span>
       </span>
       {/* Progress: played / buffered, with a native range on top for input. */}
-      <div className="group relative flex h-5 items-center">
+      <div
+        className="group relative flex h-5 items-center"
+        onPointerMove={(e) => duration && e.pointerType === "mouse" && setHover(timeAt(e))}
+        onPointerLeave={() => setHover(null)}
+      >
+        {preview !== null && duration > 0 && (
+          <div
+            className="pointer-events-none absolute bottom-full mb-2 -translate-x-1/2 rounded-md bg-black/85 px-2 py-1 text-xs font-medium tabular-nums text-white shadow"
+            style={{ left: `clamp(1.75rem, ${previewPct}%, calc(100% - 1.75rem))` }}
+          >
+            {formatTime(preview)}
+          </div>
+        )}
         <div className="absolute inset-x-0 h-1 rounded-full bg-white/20 transition-all group-hover:h-1.5">
           <div className="absolute inset-y-0 left-0 rounded-full bg-white/35" style={{ width: `${bufferedPct}%` }} />
           <div className="absolute inset-y-0 left-0 rounded-full bg-primary" style={{ width: `${pct}%` }} />
         </div>
         <div
-          className="pointer-events-none absolute size-3.5 -translate-x-1/2 rounded-full bg-primary opacity-0 shadow transition-opacity group-hover:opacity-100"
+          className={cn(
+            "pointer-events-none absolute size-3.5 -translate-x-1/2 rounded-full bg-primary shadow transition-opacity group-hover:opacity-100",
+            drag !== null || seekingNow ? "opacity-100" : "opacity-0",
+            seekingNow && "animate-pulse",
+          )}
           style={{ left: `${pct}%` }}
         />
         <input
@@ -83,7 +143,18 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
           max={duration || 0}
           step={1}
           value={currentTime}
-          onChange={(e) => onSeek(Number(e.target.value))}
+          onPointerDown={() => {
+            dragging.current = true;
+          }}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onBlur={endDrag}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            // Mouse/touch drag: preview; keyboard/remote: jump now.
+            if (dragging.current) setDrag(value);
+            else seekTo(value);
+          }}
           className="absolute inset-0 w-full cursor-pointer opacity-0"
           aria-label={t("Posición")}
           aria-valuetext={t("{a} de {b}", { a: formatTime(currentTime), b: formatTime(duration) })}

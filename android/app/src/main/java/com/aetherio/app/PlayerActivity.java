@@ -31,7 +31,9 @@ import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
+import androidx.media3.common.util.Util;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.ui.TimeBar;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -224,6 +226,7 @@ public class PlayerActivity extends Activity {
         });
 
         view.setPlayer(player);
+        showScrubTime();
         view.setShowNextButton(false);
         view.setShowPreviousButton(false);
         view.setControllerShowTimeoutMs(4000);
@@ -251,6 +254,55 @@ public class PlayerActivity extends Activity {
         if (nextOverlay.getVisibility() == visibility) return;
         nextOverlay.setVisibility(visibility);
         if (show && !view.isControllerFullyVisible()) nextOverlay.requestFocus();
+    }
+
+    /** While the bar is moved (touch or remote), show the target time big,
+     * "12:34 / 45:00": the bar's own small label is hard to read on a TV. */
+    private void showScrubTime() {
+        View bar = view.findViewById(androidx.media3.ui.R.id.exo_progress);
+        if (!(bar instanceof TimeBar)) return;
+        ((TimeBar) bar).addListener(new TimeBar.OnScrubListener() {
+            private void show(long position) {
+                handler.removeCallbacks(hideScrubTime);
+                setScrubTime(position);
+            }
+
+            @Override
+            public void onScrubStart(@NonNull TimeBar timeBar, long position) {
+                show(position);
+            }
+
+            @Override
+            public void onScrubMove(@NonNull TimeBar timeBar, long position) {
+                show(position);
+            }
+
+            @Override
+            public void onScrubStop(@NonNull TimeBar timeBar, long position, boolean canceled) {
+                // Keep it a moment so the jump is seen, then hide.
+                handler.postDelayed(hideScrubTime, 700);
+            }
+        });
+    }
+
+    private final StringBuilder timeText = new StringBuilder();
+    private final java.util.Formatter timeFormat = new java.util.Formatter(timeText, Locale.getDefault());
+    private final Runnable hideScrubTime = () -> findViewById(R.id.scrub_time).setVisibility(View.GONE);
+
+    private void setScrubTime(long position) {
+        TextView label = findViewById(R.id.scrub_time);
+        long duration = player == null ? C.TIME_UNSET : player.getDuration();
+        String text = Util.getStringForTime(timeText, timeFormat, Math.max(0, position));
+        if (duration != C.TIME_UNSET) text += "  /  " + Util.getStringForTime(timeText, timeFormat, duration);
+        label.setText(text);
+        label.setVisibility(View.VISIBLE);
+    }
+
+    /** ±10 s from the remote: show where it lands for a moment. */
+    private void flashScrubTime(long position) {
+        handler.removeCallbacks(hideScrubTime);
+        setScrubTime(position);
+        handler.postDelayed(hideScrubTime, 1200);
     }
 
     /** Visible buttons of the top bar, left to right. */
@@ -299,10 +351,12 @@ public class PlayerActivity extends Activity {
             switch (event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
                     player.seekBack();
+                    flashScrubTime(player.getCurrentPosition());
                     view.showController();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
                     player.seekForward();
+                    flashScrubTime(player.getCurrentPosition());
                     view.showController();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
@@ -380,6 +434,7 @@ public class PlayerActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacks(tick);
         handler.removeCallbacks(endWatch);
+        handler.removeCallbacks(hideScrubTime);
         if (player != null) {
             if (!finishedSent) {
                 finishedSent = true;

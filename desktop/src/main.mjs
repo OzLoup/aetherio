@@ -214,9 +214,18 @@ app.whenReady().then(async () => {
   });
 });
 
+// Window closed: stop everything that's reading a source right away, so
+// services that count open sessions (e.g. Primer Latino) free it. On macOS
+// the app stays in the Dock, so the local server keeps running for when
+// the window opens again.
 app.on("window-all-closed", () => {
+  castSession = null;
   caster?.stop().catch(() => {});
+  media?.stopAll();
+  if (process.platform !== "darwin") app.quit();
+});
+
+app.on("will-quit", () => {
   caster?.destroy();
   media?.close();
-  if (process.platform !== "darwin") app.quit();
 });

@@ -683,6 +683,25 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
     seekByRef.current = (delta: number) => seek(playback.currentTime + delta);
   });
 
+  // --- leaving: let go of the source ---
+  // Removing the <video> doesn't always stop its download right away, and
+  // some sources (e.g. Primer Latino) count an open download as a session
+  // in use. Empty it on the way out, and when the tab/app closes.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const release = () => {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+    window.addEventListener("pagehide", release);
+    return () => {
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, []);
+
   // --- keyboard / TV remote ---
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

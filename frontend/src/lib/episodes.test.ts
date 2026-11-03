@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resumePoint, type ProgressEntry } from "@/api/progress";
-import { nextEpisode } from "./episodes";
+import { nextEpisode, previousEpisode } from "./episodes";
 import { progressContextFrom, streamsPath } from "./routes";
 
 const ep = (season: number, episode: number, released = "2020-01-01") => ({ id: `tt1:${season}:${episode}`, season, episode, released });
@@ -12,6 +12,15 @@ describe("nextEpisode", () => {
     expect(nextEpisode(videos, 1, 2)?.id).toBe("tt1:2:1");
   });
   it("doesn't offer unreleased episodes", () => expect(nextEpisode(videos, 2, 1)).toBeNull());
+});
+
+describe("previousEpisode", () => {
+  const videos = [ep(1, 2), ep(1, 1), ep(0, 1), ep(2, 1)];
+  it("goes back, across seasons, skipping specials", () => {
+    expect(previousEpisode(videos, 1, 2)?.id).toBe("tt1:1:1");
+    expect(previousEpisode(videos, 2, 1)?.id).toBe("tt1:1:2");
+  });
+  it("has none before the first episode", () => expect(previousEpisode(videos, 1, 1)).toBeNull());
 });
 
 describe("resumePoint", () => {

@@ -76,8 +76,18 @@ export function StreamCard({
               s.languages
               .filter((l) => l !== "multi")
               .map((l) => (
-                <Badge key={l} variant={l === "latino" || l === "castellano" || l === "espanol" ? "primary" : "default"}>
+                <Badge
+                  key={l}
+                  variant={l === "latino" || l === "castellano" || l === "espanol" ? "primary" : "default"}
+                  className={s.unconfirmedLanguages.includes(l) ? "border-dashed" : undefined}
+                  title={
+                    s.unconfirmedLanguages.includes(l)
+                      ? t("Según la bandera del addon, sin confirmar: puede ser el idioma de los subtítulos y no del audio")
+                      : undefined
+                  }
+                >
                   {streamLangLabel(l)}
+                  {s.unconfirmedLanguages.includes(l) && "?"}
                 </Badge>
               ))}
             {s.subtitleLanguages.length > 0 && (

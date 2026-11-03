@@ -17,8 +17,8 @@ android {
         applicationId = "com.aetherio.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.5.1"
+        versionCode = 10
+        versionName = "0.5.2"
         buildConfigField("String", "WEB_URL", "\"$webUrl\"")
     }
 

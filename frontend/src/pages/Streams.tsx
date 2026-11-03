@@ -98,7 +98,8 @@ export default function Streams() {
     );
     const withVerified = list.map((s) => {
       const real = s.stream.url ? applied[s.stream.url] : undefined;
-      return real && real.length ? { ...s, languages: real } : s;
+      // Read from the file itself (Mac/Windows app): confirmed.
+      return real && real.length ? { ...s, languages: real, unconfirmedLanguages: [] } : s;
     });
     return sortStreams(withVerified, language, { desktop: Boolean(desktop || android), maxQuality: current?.max_quality });
   }, [results, sources, language, applied, current?.max_quality]);

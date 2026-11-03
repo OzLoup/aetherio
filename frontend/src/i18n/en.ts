@@ -149,6 +149,7 @@ export const en: Record<string, string> = {
   "Siguiente episodio": "Next episode",
   "Buscando la mejor fuente…": "Finding the best source…",
   "Elegir yo": "Let me choose",
+  "Según la bandera del addon, sin confirmar: puede ser el idioma de los subtítulos y no del audio": "From the addon's flag, unconfirmed: it may be the subtitles' language, not the audio's",
   "Oculto en Inicio y Descubrir; sigue apareciendo en las búsquedas.": "Hidden on Home and Discover; still shows up in searches.",
   "Sus catálogos aparecen como filas en Inicio y en Descubrir.": "Its catalogs show as rows on Home and in Discover.",
   "Mostrar en Inicio y Descubrir": "Show on Home and Discover",

@@ -20,6 +20,11 @@ export interface ParsedStream {
   languages: StreamLang[];
   /** Subtitle languages the release says it carries. */
   subtitleLanguages: StreamLang[];
+  /** Audio languages known only from a flag (not written in the name):
+   * addons also flag SUBTITLE languages (a Japanese fansub with Spanish
+   * subs gets 🇲🇽), so these are likely but not sure. Never hidden, just
+   * shown as "Latino?" and ranked after confirmed ones. */
+  unconfirmedLanguages: StreamLang[];
   hevc: boolean;
   hdr: boolean;
   /** Audio the browser usually can't decode (AC3, E-AC3, DTS, TrueHD) and
@@ -48,6 +53,8 @@ const LANG_PATTERNS: [StreamLang, RegExp][] = [
   ["japones", /🇯🇵|japanese|japon[eé]s|\bjpn\b|\bjap\b/i],
   ["multi", /\bmulti\b|\bdual\b|multi-?audio|dual-?audio/i],
 ];
+
+const FLAGS = /\p{Regional_Indicator}{2}/gu;
 
 const SUBTITLE_RELEASE =
   /multi(?:ple)?[\s._-]*sub|\bsubs?\b|subtitulad|subtitled|\bvose\b|\bvos\b|\bsub[\s._-]?(?:esp|spa|lat|eng)\b|\bsubbed\b/i;
@@ -104,6 +111,10 @@ export function parseStream(
   const audioMarked = AUDIO_MARKED.test(langText);
   const languages = subtitleRelease && !audioMarked ? [] : detected;
   const subtitleLanguages = subtitleRelease ? detected.filter((l) => l !== "multi") : [];
+  // Written out in the name/file ("LAT", "Latino", "Spanish"…) = confirmed;
+  // only a flag = unconfirmed (could be the subtitles' language).
+  const written = LANG_PATTERNS.filter(([, re]) => re.test(langText.replace(FLAGS, " "))).map(([lang]) => lang);
+  const unconfirmedLanguages = languages.filter((l) => l !== "multi" && !written.includes(l));
   const hevc = /\bhevc\b|x265|h\.?265/i.test(text);
   // Dolby (AC3/E-AC3) plays on Apple devices; DTS/TrueHD in no browser.
   const dolby = /\b(e-?ac-?3|ac-?3|ddp?\+?\s?[257]\.1|dd\+|atmos)\b/i.test(text);
@@ -125,6 +136,7 @@ export function parseStream(
     size: sizeMatch ? `${sizeMatch[1].replace(",", ".")} ${sizeMatch[2].toUpperCase().replace("I", "")}` : null,
     languages,
     subtitleLanguages,
+    unconfirmedLanguages,
     hevc,
     hdr,
     audioRisk,
@@ -186,6 +198,9 @@ export function sortStreams(
     isPlayable(s) ? 0 : 1,
     -languageScore(s, profileLanguage),
     isReady(s) ? 0 : 1,
+    // Same language but only from a flag: after the confirmed ones that are
+    // as ready (a ready "Latino?" still beats one that must download).
+    unsureLanguageFor(s, profileLanguage) ? 1 : 0,
     // Needs the addon's own paid plan ("🔒 Exclusivo Premium"), or already
     // gave a short notice instead of the video: after the ones that play.
     // Marked by the addon, so a real 4K (e.g. Torrentio) isn't affected.
@@ -226,6 +241,13 @@ export function toAlt(s: ParsedStream): AltStream {
 }
 
 /** Is this audio already in the profile's language? */
+/** The profile's language is there, but only from a flag (see
+ * ParsedStream.unconfirmedLanguages). */
+export function unsureLanguageFor(s: Pick<ParsedStream, "languages" | "unconfirmedLanguages">, profileLanguage: string) {
+  const sure = s.languages.filter((l) => !s.unconfirmedLanguages.includes(l));
+  return isDubbedFor(s.languages, profileLanguage) && !isDubbedFor(sure, profileLanguage);
+}
+
 export function isDubbedFor(languages: StreamLang[], profileLanguage: string) {
   const scores = languageInfo(profileLanguage).streamScore;
   // >= 2: the exact language, or generic "Spanish" for a Spanish profile.

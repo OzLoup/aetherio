@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AddonRef } from "@/lib/stremio";
-import { gaveShortClip, isDebridStream, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt } from "./streams";
+import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt } from "./streams";
 import { shiftVtt, srtToVtt } from "./subtitles";
 
 const torrentio: AddonRef = {
@@ -293,5 +293,33 @@ describe("premium-only sources", () => {
     const plain4k = mk("Movie 2160p 4K WEB-DL\nLatino", 0);
     const plain1080 = mk("Movie 1080p WEB-DL\nLatino", 1);
     expect(sortStreams([plain4k, plain1080], "es-419")[0]).toBe(plain4k);
+  });
+});
+
+describe("flag-only languages", () => {
+  const addon = { transportUrl: "https://a", manifest: { id: "a", name: "A", version: "1", resources: [], types: [] } } as unknown as AddonRef;
+  const mk = (description: string, i = 0, filename?: string) =>
+    parseStream({ name: "Torrentio\n1080p", description, url: `https://cdn.example/${i}.mkv`, behaviorHints: filename ? { filename } : undefined }, addon, 0, i)!;
+
+  it("keeps a flag-only language, marked unconfirmed (never hidden)", () => {
+    const za = mk(
+      "[Z-A] Kimetsu no Yaiba Infinity Castle I (2025) (BD 1080p HEVC A…\n👤 10 💾 7.1 GB ⚙️ TorrentGalaxy\n🇲🇽",
+      0,
+      "[Z-A] Kimetsu no Yaiba Infinity Castle I (2025) (BD 1080p HEVC AAC) [94247AF7].mkv",
+    );
+    expect(za.languages).toEqual(["latino"]);
+    expect(za.unconfirmedLanguages).toEqual(["latino"]);
+    expect(isDubbedFor(za.languages, "es-419")).toBe(true); // still passes "Solo español latino"
+  });
+
+  it("confirms languages written in the name", () => {
+    expect(mk("Demon.Slayer.2025.1080p.CAMRip.LAT.DUB\n🇲🇽").unconfirmedLanguages).toEqual([]);
+    expect(mk("Castlevania S01 English Spanish 1080p\n🇬🇧 🇪🇸").unconfirmedLanguages).toEqual([]);
+  });
+
+  it("ranks a confirmed one before an unconfirmed one, both ready", () => {
+    const flagOnly = mk("[Grupo] Pelicula (1080p)\n🇲🇽", 0);
+    const written = mk("Pelicula 1080p Latino\n🇲🇽", 1);
+    expect(sortStreams([flagOnly, written], "es-419")[0]).toBe(written);
   });
 });

@@ -1,10 +1,10 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+# No compiler or libpq headers: psycopg[binary] ships its own libpq, so the
+# image stays small (faster Cloud Run cold starts, less to patch).
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

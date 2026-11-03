@@ -171,7 +171,9 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
         <BarButton label={t("Adelantar 10 segundos")} onClick={() => onSkip(10)}>
           <RotateCw />
         </BarButton>
-        {/* Phones use their volume buttons (iOS ignores page volume). */}
+        {/* Phones use their volume buttons (iOS ignores page volume). The
+            slider opens on hover, or when the mute button gets focus (TV
+            remote: then right reaches it, left/right set the volume). */}
         <div className="group/vol hidden items-center sm:flex">
           <BarButton label={muted ? t("Activar sonido") : t("Silenciar")} onClick={onToggleMute}>
             <VolumeIcon />
@@ -183,7 +185,7 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
             step={0.05}
             value={muted ? 0 : volume}
             onChange={(e) => onVolume(Number(e.target.value))}
-            className="w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all group-hover/vol:w-20 group-hover/vol:opacity-100 focus-visible:w-20 focus-visible:opacity-100"
+            className="w-0 cursor-pointer accent-[var(--primary)] opacity-0 transition-all group-hover/vol:w-20 group-hover/vol:opacity-100 group-focus-within/vol:w-20 group-focus-within/vol:opacity-100"
             aria-label={t("Volumen")}
           />
         </div>

@@ -35,12 +35,18 @@ const FOCUSABLE = [
   "[role=menuitem]",
 ].join(",");
 
+type WithCheckVisibility = HTMLElement & { checkVisibility?: (o?: { opacityProperty?: boolean; visibilityProperty?: boolean }) => boolean };
+
+/** Cheap first (size), the browser's own check next; getComputedStyle on
+ * every poster of a long grid made each press (and held arrows) slow. */
 function isVisible(el: HTMLElement) {
-  if (el.closest("[aria-hidden=true], [inert]")) return false;
   const r = el.getBoundingClientRect();
   if (r.width < 2 || r.height < 2) return false;
+  if (el.closest("[aria-hidden=true], [inert]")) return false;
+  const check = (el as WithCheckVisibility).checkVisibility;
+  if (check) return check.call(el, { opacityProperty: true, visibilityProperty: true });
   const style = getComputedStyle(el);
-  return style.visibility !== "hidden" && style.display !== "none" && Number(style.opacity) > 0.05;
+  return style.visibility !== "hidden" && Number(style.opacity) > 0.05;
 }
 
 /** An open modal/menu traps focus; otherwise the whole page. */
@@ -92,10 +98,16 @@ function best(from: DOMRect, list: HTMLElement[], dir: Direction, current: HTMLE
   return winner;
 }
 
-function focusEl(el: HTMLElement) {
+/** Held arrow: jump without animation (smooth scrolls piled up and lagged). */
+function focusEl(el: HTMLElement, instant = false) {
   el.focus({ preventScroll: true });
-  el.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  el.scrollIntoView({ block: "center", inline: "nearest", behavior: instant ? "auto" : "smooth" });
 }
+
+// A held arrow repeats ~30 times a second; one move every this many ms
+// keeps it fast but readable.
+const REPEAT_MS = 90;
+let lastMove = 0;
 
 /** First thing to focus on a page: top-most, left-most visible item (main content first). */
 function firstItem(list: HTMLElement[]) {
@@ -220,10 +232,13 @@ function onKeyDown(e: KeyboardEvent) {
   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   if (active && keepsArrows(active, dir)) return;
 
+  e.preventDefault();
+  if (e.repeat && performance.now() - lastMove < REPEAT_MS) return;
+  lastMove = performance.now();
+
   const root = scope();
   const list = candidates(root);
   const current = active && active !== document.body && list.includes(active) ? active : null;
-  e.preventDefault();
 
   if (!current) {
     const first = firstItem(list);
@@ -232,10 +247,10 @@ function onKeyDown(e: KeyboardEvent) {
   }
   const next = best(current.getBoundingClientRect(), list, dir, current);
   if (next) {
-    focusEl(next);
+    focusEl(next, e.repeat);
   } else if (root === document && (dir === "up" || dir === "down")) {
     // Rows further down may still be loading: scroll to bring them in.
-    window.scrollBy({ top: (dir === "down" ? 1 : -1) * window.innerHeight * 0.6, behavior: "smooth" });
+    window.scrollBy({ top: (dir === "down" ? 1 : -1) * window.innerHeight * 0.6, behavior: e.repeat ? "auto" : "smooth" });
   }
 }
 

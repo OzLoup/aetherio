@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, MoreVertical, RefreshCw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getErrorDetail } from "@/api/client";
 import type { InstalledAddon } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,10 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onMove, onRefresh,
   const [busy, setBusy] = useState<"refresh" | "uninstall" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // "Desinstalar" opens the dialog only once the menu has closed: opened
+  // right away, on touch screens the same tap reached the new dialog as a
+  // tap outside and closed it (phones couldn't uninstall).
+  const confirmAfterMenu = useRef(false);
   const [copied, setCopied] = useState(false);
 
   async function run(kind: "refresh" | "uninstall", fn: () => Promise<void>) {
@@ -134,7 +138,14 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onMove, onRefresh,
                 {busy === "refresh" ? <Loader2 className="animate-spin" /> : <MoreVertical />}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent
+              onCloseAutoFocus={(e) => {
+                if (!confirmAfterMenu.current) return;
+                confirmAfterMenu.current = false;
+                e.preventDefault(); // focus goes to the dialog, not back to "⋯"
+                setConfirmOpen(true);
+              }}
+            >
               <DropdownMenuItem onSelect={() => run("refresh", onRefresh)}>
                 <RefreshCw />
                 {t("Actualizar manifest")}
@@ -144,7 +155,7 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onMove, onRefresh,
                 {copied ? t("¡Copiada!") : t("Copiar URL")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive focus:bg-destructive/10" onSelect={() => setConfirmOpen(true)}>
+              <DropdownMenuItem className="text-destructive focus:bg-destructive/10" onSelect={() => (confirmAfterMenu.current = true)}>
                 <Trash2 />
                 {t("Desinstalar")}
               </DropdownMenuItem>

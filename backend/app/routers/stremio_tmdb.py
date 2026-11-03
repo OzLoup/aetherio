@@ -35,6 +35,19 @@ def countries():
     )
 
 
+@router.get("/suggest.json")
+async def suggest(q: str = "", lang: str = "es-419"):
+    """Suggestions while typing in a search box. Empty when the catalogs are
+    off or nothing matches (the box then just shows no list)."""
+    if not tmdb.enabled():
+        return JSONResponse({"metas": []}, headers={**HEADERS, "Cache-Control": "public, max-age=300"})
+    try:
+        metas = await tmdb.suggest(q, lang)
+    except tmdb.TmdbError:
+        metas = []
+    return JSONResponse({"metas": metas}, headers={**HEADERS, "Cache-Control": "public, max-age=300"})
+
+
 @router.get("/similar/{type_}/{imdb_id}.json")
 async def similar(type_: str, imdb_id: str, lang: str = "es-419"):
     """"Títulos similares" on a detail page. Empty when the catalogs are off

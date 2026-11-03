@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Compass, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users, Radio } from "lucide-react";
-import { Suspense, useState, type FormEvent, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
 import { useProfiles } from "@/context/ProfileContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -20,6 +19,7 @@ import { FadeUp } from "./motion/FadeUp";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ProfileAvatar } from "./profiles/ProfileAvatar";
 import { focusPageStart } from "@/lib/spatialNav";
+import { SearchSuggest } from "./catalog/SearchSuggest";
 
 const NAV = [
   { to: "/", label: "Inicio", icon: Home },
@@ -34,18 +34,14 @@ function HeaderSearch() {
   const [params] = useSearchParams();
   const [q, setQ] = useState(location.pathname === "/search" ? (params.get("q") ?? "") : "");
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const query = q.trim();
-    if (query) navigate(`/search?${new URLSearchParams({ q: query })}`);
-  }
-
   return (
     <>
-      <form onSubmit={handleSubmit} className="relative hidden w-56 md:block">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Buscar")} className="pl-8" aria-label={t("Buscar")} />
-      </form>
+      <SearchSuggest
+        value={q}
+        onChange={setQ}
+        onSubmit={(query) => navigate(`/search?${new URLSearchParams({ q: query })}`)}
+        className="hidden w-56 md:block"
+      />
       <NavLink to="/search" className="md:hidden" aria-label={t("Buscar")}>
         <span className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-muted">
           <Search className="size-4" />

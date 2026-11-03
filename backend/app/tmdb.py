@@ -379,3 +379,33 @@ async def meta(type_: str, imdb_id: str, language: str) -> dict | None:
 
     out["videos"] = [v for chunk in await asyncio.gather(*(season(n) for n in seasons)) for v in chunk]
     return out
+
+
+# --- search suggestions (search box) -----------------------------------------------
+
+SUGGEST_MAX = 8
+
+
+async def suggest(query: str, language: str) -> list[dict]:
+    """Movies and series matching what's typed so far, most relevant first
+    (TMDB's multi search), with IMDb ids so they open like any other title."""
+    query = query.strip()
+    if len(query) < 2:
+        return []
+    lang = LANGUAGES.get(language, language if len(language) == 5 else "es-MX")
+    data = await _get("/search/multi", query=query, language=lang, page=1, include_adult="false")
+    items = [i for i in data.get("results", []) if i.get("media_type") in ("movie", "tv") and i.get("id")]
+    items = items[: SUGGEST_MAX + 4]  # a few spare for titles without an IMDb id
+    by_kind: dict[str, list[int]] = {"movie": [], "tv": []}
+    for i in items:
+        by_kind[i["media_type"]].append(i["id"])
+    ids = {kind: await imdb_ids(kind, tmdb_ids) for kind, tmdb_ids in by_kind.items()}
+    out = []
+    for i in items:
+        kind = i["media_type"]
+        imdb = ids[kind].get(i["id"])
+        if imdb:
+            out.append(to_meta(i, "movie" if kind == "movie" else "series", imdb))
+        if len(out) == SUGGEST_MAX:
+            break
+    return out

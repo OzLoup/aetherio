@@ -295,3 +295,29 @@ describe("premium-only sources", () => {
     expect(sortStreams([plain4k, plain1080], "es-419")[0]).toBe(plain4k);
   });
 });
+
+describe("fansub releases", () => {
+  const addon = { transportUrl: "https://a", manifest: { id: "a", name: "A", version: "1", resources: [], types: [] } } as unknown as AddonRef;
+  const parse = (name: string, description: string, filename?: string) =>
+    parseStream({ name, description, url: "https://cdn.example/v.mkv", behaviorHints: filename ? { filename } : undefined }, addon, 0, 0)!;
+
+  it("reads a lone flag as subtitles, not audio", () => {
+    const s = parse(
+      "Torrentio\n1080p",
+      "[Z-A] Kimetsu no Yaiba Infinity Castle I (2025) (BD 1080p HEVC A…\n👤 10 💾 7.1 GB ⚙️ TorrentGalaxy\n🇲🇽",
+      "[Z-A] Kimetsu no Yaiba Infinity Castle I (2025) (BD 1080p HEVC AAC) [94247AF7].mkv",
+    );
+    expect(s.languages).toEqual([]);
+    expect(s.subtitleLanguages).toEqual(["latino"]);
+  });
+
+  it("keeps the audio when the release says so", () => {
+    const s = parse("Torrentio\n1080p", "[Grupo] Serie 01 (1080p) Dual Audio Latino\n🇲🇽 🇯🇵");
+    expect(s.languages).toContain("latino");
+  });
+
+  it("doesn't change normal releases with a flag", () => {
+    const s = parse("Torrentio\n1080p", "Movie.2025.1080p.WEB-DL\n🇲🇽");
+    expect(s.languages).toEqual(["latino"]);
+  });
+});

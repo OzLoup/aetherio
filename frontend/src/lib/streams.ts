@@ -52,6 +52,11 @@ const LANG_PATTERNS: [StreamLang, RegExp][] = [
 const SUBTITLE_RELEASE =
   /multi(?:ple)?[\s._-]*sub|\bsubs?\b|subtitulad|subtitled|\bvose\b|\bvos\b|\bsub[\s._-]?(?:esp|spa|lat|eng)\b|\bsubbed\b/i;
 const AUDIO_MARKED = /\bdual\b|multi[\s._-]*audio|dual[\s._-]*audio|\baudio\b|\blatino\b|castellano|doblad|dublad|\bdub\b/i;
+// Fansub releases ("[Z-A] Kimetsu no Yaiba … [94247AF7].mkv"): original
+// audio with subtitles. Torrentio flags their SUBTITLE language (🇲🇽 on a
+// Japanese-audio file with Spanish subs), so a flag alone isn't the audio.
+const FANSUB = /^\s*\[[^\]]+\]/;
+const FLAGS = /\p{Regional_Indicator}{2}/gu;
 
 function detectQuality(text: string): Quality | null {
   if (/2160p|\b4k\b|\buhd\b/i.test(text)) return "4K";
@@ -102,8 +107,15 @@ export function parseStream(
   // (Found by checking Real-Debrid's real track list: Japanese only.)
   const subtitleRelease = SUBTITLE_RELEASE.test(langText);
   const audioMarked = AUDIO_MARKED.test(langText);
-  const languages = subtitleRelease && !audioMarked ? [] : detected;
-  const subtitleLanguages = subtitleRelease ? detected.filter((l) => l !== "multi") : [];
+  const fansub = FANSUB.test(details) || FANSUB.test(filename ?? "");
+  // Fansubs: only languages written out (not just a flag) are audio.
+  const written =
+    fansub && !audioMarked
+      ? LANG_PATTERNS.filter(([, re]) => re.test(langText.replace(FLAGS, ""))).map(([lang]) => lang)
+      : detected;
+  const flagOnly = detected.filter((l) => !written.includes(l));
+  const languages = subtitleRelease && !audioMarked ? [] : detected.filter((l) => written.includes(l));
+  const subtitleLanguages = (subtitleRelease ? detected : flagOnly).filter((l) => l !== "multi");
   const hevc = /\bhevc\b|x265|h\.?265/i.test(text);
   // Dolby (AC3/E-AC3) plays on Apple devices; DTS/TrueHD in no browser.
   const dolby = /\b(e-?ac-?3|ac-?3|ddp?\+?\s?[257]\.1|dd\+|atmos)\b/i.test(text);

@@ -8,6 +8,7 @@ import { useAddons } from "@/hooks/useAddons";
 import { useNextEpisode } from "@/hooks/useNextEpisode";
 import { android, type NativeSubtitle } from "@/lib/android";
 import { onRemoteBack } from "@/lib/spatialNav";
+import { DebridProgress } from "@/components/player/DebridProgress";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
 import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
@@ -226,6 +227,10 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
               ? t("Tu debrid todavía está descargando este archivo. Vuelve a intentarlo en unos minutos o elige otro stream.")
               : t("Esta fuente devolvió un video muy corto, no el episodio o la película. Suele ser un aviso del addon (por ejemplo, que requiere su plan premium). Elige otra fuente.")}
           </p>
+          {/* Debrid download progress; reopens the player when it's done. */}
+          {isDebridStream(stream) && stream.url && (
+            <DebridProgress url={stream.url} onReady={() => launch(subsRef.current, (startAt ?? 0) * 1000)} />
+          )}
           <Button size="lg" autoFocus onClick={() => navigate(-1)}>
             <ListVideo />
             {t("Elegir otro stream")}

@@ -19,18 +19,18 @@ export function BrandMark({ className }: { className?: string }) {
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
       <defs>
         <linearGradient id="aio-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#241a46" />
-          <stop offset="1" stopColor="#0c0a19" />
+          <stop offset="0" stopColor="#0e2540" />
+          <stop offset="1" stopColor="#060b16" />
         </linearGradient>
         <linearGradient id="aio-fg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#a98bff" />
-          <stop offset="1" stopColor="#4f8dfb" />
+          <stop offset="0" stopColor="#7fb6ee" />
+          <stop offset="1" stopColor="#2f7fd0" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="15" fill="url(#aio-bg)" />
       <ellipse cx="32" cy="32" rx="25" ry="10.5" fill="none" stroke="url(#aio-fg)" strokeWidth="2.6" opacity=".55" transform="rotate(-24 32 32)" />
       <path d="M26 21.5v21a1.6 1.6 0 0 0 2.4 1.4l17-10.5a1.6 1.6 0 0 0 0-2.8l-17-10.5A1.6 1.6 0 0 0 26 21.5Z" fill="url(#aio-fg)" />
-      <circle cx="51.5" cy="21" r="2.6" fill="#c9b8ff" />
+      <circle cx="51.5" cy="21" r="2.6" fill="#cfe3f7" />
     </svg>
   );
 }

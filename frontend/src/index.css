@@ -11,9 +11,9 @@
 
 :root {
   /* Hue of the whole UI (buttons, focus, links, the faint tint of the
-     greys): the brand violet, or the current profile's color
+     greys): the brand blue (#12518b), or the current profile's color
      (html[data-accent], set by ProfileContext). */
-  --accent-h: 292;
+  --accent-h: 251;
   --background: oklch(0.99 0 0);
   --foreground: oklch(0.18 0.01 var(--accent-h));
   --card: oklch(1 0 0);
@@ -86,6 +86,16 @@
   --series-8: #e66767;
 }
 
+/* No profile (login, profile picker): the exact brand blue, #12518b. */
+html:not([data-accent]) {
+  --primary: oklch(0.429 0.114 251);
+  --ring: oklch(0.5 0.13 251);
+}
+html.dark:not([data-accent]) {
+  --primary: oklch(0.66 0.13 251);
+  --ring: oklch(0.7 0.13 251);
+}
+
 /* Profile color → UI hue (same order as the avatar colors). */
 html[data-accent="series-1"] { --accent-h: 255; } /* blue */
 html[data-accent="series-2"] { --accent-h: 45; }  /* orange */
@@ -155,7 +165,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* App wordmark: Space Grotesk with a violet -> blue gradient. */
+/* App wordmark: Space Grotesk with a gradient from the UI color to blue. */
 .brand-wordmark {
   font-family: var(--font-brand);
   font-weight: 700;

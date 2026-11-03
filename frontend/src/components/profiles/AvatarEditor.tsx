@@ -1,6 +1,5 @@
 import { Camera, Loader2, Trash2, ZoomIn } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import Cropper from "react-easy-crop";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { getErrorDetail } from "@/api/client";
 import type { Profile } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,9 @@ import { t } from "@/i18n";
 
 /** Profile photo: pick an image, crop it to a square, upload; or remove it
  * (the profile then shows its color with the initial). */
+// The cropper (~40 KB) loads only when a photo is being cropped.
+const Cropper = lazy(() => import("react-easy-crop"));
+
 export function AvatarEditor({ profile }: { profile: Profile }) {
   const { setAvatar } = useProfiles();
   const input = useRef<HTMLInputElement>(null);
@@ -95,6 +97,7 @@ export function AvatarEditor({ profile }: { profile: Profile }) {
           </DialogHeader>
           <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-black">
             {src && (
+              <Suspense fallback={<Loader2 className="absolute inset-0 m-auto size-6 animate-spin text-white/70" />}>
               <Cropper
                 image={src}
                 crop={crop}
@@ -108,6 +111,7 @@ export function AvatarEditor({ profile }: { profile: Profile }) {
                 onCropComplete={(_, pixels) => setArea(pixels)}
                 style={{ cropAreaStyle: { borderRadius: "1rem" } }}
               />
+              </Suspense>
             )}
           </div>
           <label className="flex items-center gap-3 text-sm">

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { episodeCode } from "@/lib/episodes";
 import { typeLabel } from "@/lib/labels";
 import { streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { en } from "./en";
-import { setLanguage, t } from "./index";
+import { loadDictionary, setLanguage, t } from "./index";
 
+beforeAll(() => loadDictionary("en"));
 afterEach(() => setLanguage("es"));
 
 describe("i18n", () => {

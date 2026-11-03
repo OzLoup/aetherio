@@ -2,7 +2,11 @@
    Tailwind utilities (flex, gap…) win over its defaults. A @layer statement
    is allowed before @import. */
 @layer blossom-carousel;
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap");
+/* Fonts are served from this site (not Google Fonts): no extra connections
+   and no @import chain before text can render; the CSP stays strict. The
+   browser only downloads the alphabets a page actually uses. */
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource/space-grotesk/700.css";
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
@@ -141,7 +145,7 @@ html[data-accent="series-8"] { --accent-h: 25; }  /* red */
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-brand: "Space Grotesk", var(--font-sans);
 }
 

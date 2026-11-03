@@ -26,12 +26,13 @@ interface AddonCardProps {
   isFirst: boolean;
   isLast: boolean;
   onToggle: (enabled: boolean) => Promise<void>;
+  onShowCatalogs: (show: boolean) => Promise<void>;
   onMove: (direction: -1 | 1) => Promise<void>;
   onRefresh: () => Promise<void>;
   onUninstall: () => Promise<void>;
 }
 
-export function AddonCard({ addon, isFirst, isLast, onToggle, onMove, onRefresh, onUninstall }: AddonCardProps) {
+export function AddonCard({ addon, isFirst, isLast, onToggle, onShowCatalogs, onMove, onRefresh, onUninstall }: AddonCardProps) {
   const { manifest } = addon;
   const [busy, setBusy] = useState<"refresh" | "uninstall" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +92,18 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onMove, onRefresh,
       </div>
 
       <AddonBadges manifest={manifest} />
+
+      {(manifest.catalogs?.length ?? 0) > 0 && addon.enabled && (
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            {t("Mostrar sus catálogos")}
+            <span className="block text-xs text-muted-foreground">
+              {addon.show_catalogs ? t("Sus filas y su búsqueda aparecen en la app.") : t("Oculto: solo aporta fichas y lo demás que ofrezca.")}
+            </span>
+          </span>
+          <Switch checked={addon.show_catalogs} onCheckedChange={(v) => safely(() => onShowCatalogs(v))} />
+        </label>
+      )}
 
       {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
 

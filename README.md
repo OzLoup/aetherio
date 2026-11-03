@@ -26,8 +26,9 @@ autoridad: en Windows "Más información → Ejecutar de todas formas"; en macOS
 Para publicar una versión nueva: `git tag v0.2.0 && git push origin v0.2.0` (o Actions → Release →
 Run workflow). El workflow `.github/workflows/release.yml` compila los tres instaladores y los sube.
 
-> AetherIO no aloja, no distribuye y **no recomienda** contenido, addons ni listas: no trae nada
-> preinstalado salvo los addons oficiales de metadatos y subtítulos. Todo lo que se reproduce viene
+> AetherIO no aloja, no distribuye y **no recomienda** contenido, addons ni listas: los perfiles
+> nuevos solo traen addons de metadatos (información de los títulos, sin videos): Catálogos AetherIO
+> (TMDB) y Cinemeta como respaldo de fichas, con sus catálogos ocultos. Todo lo que se reproduce viene
 > de las fuentes que cada usuario agrega bajo su propia responsabilidad (ver `/legal` en la app).
 
 ## Funciones

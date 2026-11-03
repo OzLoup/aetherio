@@ -173,3 +173,28 @@ def test_catalog_items_carry_genre_names(monkeypatch):
     monkeypatch.setattr(tmdb, "imdb_ids", fake_ids)
     metas = asyncio.run(tmdb.catalog("MX", "movie", "aetherio.trending", {}))
     assert metas[0]["genres"] == ["Acción"]
+
+
+def test_default_addons(monkeypatch):
+    from types import SimpleNamespace
+
+    from app import addons_service
+
+    installed = []
+
+    def fake_install(db, profile, url):
+        installed.append(url)
+        return SimpleNamespace(show_catalogs=True)
+
+    class FakeDb:
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    monkeypatch.setattr(addons_service, "install", fake_install)
+    monkeypatch.setattr(settings, "tmdb_api_key", "k")
+    monkeypatch.setattr(settings, "public_url", "https://api.example")
+    addons_service.install_defaults(FakeDb(), SimpleNamespace(language="es-ES"))
+    assert installed == ["https://api.example/stremio/tmdb/ES/manifest.json", addons_service.CINEMETA_URL]

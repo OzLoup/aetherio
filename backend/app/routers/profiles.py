@@ -52,6 +52,8 @@ def create_profile(payload: ProfileCreate, user: User = Depends(get_current_user
     if source:
         addons_service.copy_addons(db, source, profile)
     db.commit()
+    if not source:
+        addons_service.install_defaults(db, profile)
     db.refresh(profile)
     return profile
 

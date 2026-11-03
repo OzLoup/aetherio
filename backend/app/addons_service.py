@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.adult import is_adult_manifest
+from app.config import settings
 from app.crypto import url_hash
 from app.models import Profile, ProfileAddon
 from app.stremio.client import AddonError, normalize_manifest_url, resolve_manifest
@@ -25,6 +26,35 @@ def find_by_url(db: Session, profile: Profile, transport_url: str) -> ProfileAdd
             ProfileAddon.profile_id == profile.id, ProfileAddon.url_hash == url_hash(transport_url)
         )
     )
+
+
+CINEMETA_URL = "https://v3-cinemeta.strem.io/manifest.json"
+# Profile language → country of the own catalogs installed by default.
+DEFAULT_COUNTRY = {"es-419": "MX", "es-ES": "ES", "pt-BR": "BR", "en": "US"}
+
+
+def install_defaults(db: Session, profile: Profile) -> None:
+    """New profiles start with metadata only (never streams): the own
+    catalogs (catalogs, search and details in the profile's language) and
+    Cinemeta below them as a backup for details, its catalogs hidden so
+    nothing shows twice. An addon that can't be reached is just skipped."""
+    from app import tmdb  # avoid an import cycle at startup
+
+    wanted: list[tuple[str, bool]] = []
+    if tmdb.enabled():
+        country = DEFAULT_COUNTRY.get(profile.language, "MX")
+        wanted.append((f"{settings.public_url.rstrip('/')}/stremio/tmdb/{country}/manifest.json", True))
+    # Without the own catalogs, Cinemeta keeps its catalogs and search.
+    wanted.append((CINEMETA_URL, not wanted))
+    for url, show_catalogs in wanted:
+        try:
+            addon = install(db, profile, url)
+        except Exception:  # noqa: BLE001 - a default addon is never worth failing the profile
+            db.rollback()
+            continue
+        if addon.show_catalogs != show_catalogs:
+            addon.show_catalogs = show_catalogs
+            db.commit()
 
 
 def install(db: Session, profile: Profile, raw_url: str, client_manifest: dict | None = None) -> ProfileAddon:
@@ -68,5 +98,6 @@ def copy_addons(db: Session, source: Profile, target: Profile) -> None:
                 manifest=addon.manifest,
                 position=addon.position,
                 enabled=addon.enabled,
+                show_catalogs=addon.show_catalogs,
             )
         )

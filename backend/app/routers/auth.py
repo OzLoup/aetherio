@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app import addons_service
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.config import settings
 from app.database import get_db
@@ -23,8 +24,9 @@ oauth.register(
 
 
 def _first_profile(user: User) -> Profile:
-    """Every account starts with one profile, named after its owner. No
-    addons are preinstalled: each profile installs its own."""
+    """Every account starts with one profile, named after its owner, with
+    the default metadata addons (addons_service.install_defaults; never
+    streams addons)."""
     first_name = (user.name or "").strip().split(" ")[0]
     return Profile(user_id=user.id, name=(first_name or "Principal")[:50])
 
@@ -37,8 +39,10 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     user = User(email=payload.email, name=payload.name, hashed_password=hash_password(payload.password))
     db.add(user)
     db.flush()
-    db.add(_first_profile(user))
+    profile = _first_profile(user)
+    db.add(profile)
     db.commit()
+    addons_service.install_defaults(db, profile)
 
     return Token(access_token=create_access_token(user.email))
 
@@ -133,8 +137,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         user = User(email=email, name=name, google_id=google_id)
         db.add(user)
         db.flush()
-        db.add(_first_profile(user))
+        profile = _first_profile(user)
+        db.add(profile)
         db.commit()
+        addons_service.install_defaults(db, profile)
     elif not user.google_id:
         user.google_id = google_id
         db.commit()

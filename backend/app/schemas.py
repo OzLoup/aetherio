@@ -164,13 +164,15 @@ class AddonOut(BaseModel):
     manifest: dict
     position: int
     enabled: bool
+    show_catalogs: bool = True
     adult: bool = False
     installed_at: datetime
     manifest_updated_at: datetime
 
 
 class AddonUpdate(BaseModel):
-    enabled: bool
+    enabled: bool | None = None
+    show_catalogs: bool | None = None
 
 
 class AddonOrderIn(BaseModel):

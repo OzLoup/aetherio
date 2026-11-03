@@ -330,7 +330,8 @@ export default function Streams() {
           )}
 
           {visible.length > 0 ? (
-            <ul className="flex flex-col gap-2">
+            // TV remote: the page starts on the first source.
+            <ul className="flex flex-col gap-2" data-remote-start>
               {visible.map((s) => (
                 <StreamCard
                   key={s.key}

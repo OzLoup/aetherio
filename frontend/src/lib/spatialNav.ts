@@ -165,12 +165,83 @@ let lastMove = 0;
 // Where the focus last was (to resume if that element disappears).
 let lastRect: DOMRect | null = null;
 let lastPath = "";
+// Last thing focused on the page itself (not the top bar): ↓ from the
+// top bar goes back there.
+let lastOnPage: HTMLElement | null = null;
+let lastOnPagePath = "";
+
+// The sticky top bar (logo, menu, search, profile). It's always on screen,
+// so by geometry alone ↑ would jump to it from anywhere; it's only reached
+// from the top of the page instead.
+const TOP_BAR = "[data-nav-top]";
+
+function inTopBar(el: Element) {
+  return el.closest(TOP_BAR) !== null;
+}
+
+// Per page, the item focused last (its link or source): going back to a
+// page puts the focus there again (the poster you opened, the source that
+// was playing).
+const pageFocus = new Map<string, string>();
+const pageKey = () => location.pathname + location.search;
+/** What identifies an item across visits: its link, or a source's URL. */
+function identity(el: HTMLElement) {
+  return el.getAttribute("href") ?? el.dataset.stream ?? null;
+}
+function findByIdentity(id: string) {
+  for (const el of document.querySelectorAll<HTMLElement>("main a[href], main [data-stream]")) {
+    if (identity(el) === id && isVisible(el)) return el;
+  }
+  return null;
+}
+
+// Dialogs opened by a plain button (not a Radix trigger) don't know where to
+// put the focus back when they close: remember what was focused before.
+const LAYER = "[role=dialog], [role=alertdialog], [role=menu]";
+let lastOutsideLayer: HTMLElement | null = null;
+let opener: HTMLElement | null = null;
+
+/** Focus lost after a dialog/menu closed: back to what opened it. */
+function restoreOpener() {
+  const active = document.activeElement;
+  if (active && active !== document.body && active.isConnected) return false;
+  const target = opener;
+  opener = null;
+  if (!target?.isConnected || !isVisible(target)) return false;
+  target.focus({ preventScroll: true });
+  return true;
+}
 
 function rememberFocus(e: FocusEvent) {
   const el = e.target;
   if (!(el instanceof HTMLElement) || el === document.body) return;
+  if (el.closest(LAYER)) {
+    if (lastOutsideLayer && !opener) opener = lastOutsideLayer;
+  } else {
+    lastOutsideLayer = el;
+    opener = null;
+  }
   lastRect = el.getBoundingClientRect();
   lastPath = location.pathname;
+  if (el.closest("main")) {
+    lastOnPage = el;
+    lastOnPagePath = location.pathname;
+    const id = identity(el);
+    if (id) pageFocus.set(pageKey(), id);
+  }
+}
+
+// Set by Back (browser history), read by the next focusPageStart.
+let wentBack = false;
+// Any key since the page changed: the user is driving, leave the focus be.
+let movedSincePageChange = false;
+
+/** Tabs (seasons…): coming in from outside lands on the selected one. */
+function preferSelectedTab(next: HTMLElement, current: HTMLElement) {
+  const list = next.closest("[role=tablist]");
+  if (!list || list.contains(current)) return next;
+  const selected = list.querySelector<HTMLElement>("[role=tab][aria-selected=true]");
+  return selected && isVisible(selected) ? selected : next;
 }
 
 function nearest(from: DOMRect, all: { el: HTMLElement; r: DOMRect }[]) {
@@ -186,6 +257,14 @@ function nearest(from: DOMRect, all: { el: HTMLElement; r: DOMRect }[]) {
     }
   }
   return winner;
+}
+
+/** ↓ from the top bar: the last item focused on this page, else the
+ * page's first visible item. */
+function backToPage(all: { el: HTMLElement; r: DOMRect }[]) {
+  if (lastOnPage?.isConnected && lastOnPagePath === location.pathname && isVisible(lastOnPage)) return lastOnPage;
+  const page = all.filter(({ el }) => el.closest("main") && isVisible(el)).map(({ el }) => el);
+  return page.length ? firstItem(page) : null;
 }
 
 /** First thing to focus on a page: top-most, left-most visible item (main content first). */
@@ -258,6 +337,9 @@ function onFocusIn(e: FocusEvent) {
 
 function onFocusOut(e: FocusEvent) {
   const el = e.target as Element;
+  // Focus dropped out of a closing dialog/menu (after its animation): put
+  // it back on what opened it.
+  if (!e.relatedTarget && el instanceof Element && el.closest(LAYER)) window.setTimeout(restoreOpener, 30);
   if (refocusing || !isTextField(el)) return;
   // Leaving: the next visit starts locked again; meanwhile the field is
   // as the page made it (mouse/touch keep working).
@@ -280,6 +362,71 @@ function isClosedPopupTrigger(el: Element | null) {
   return Boolean(popup && popup !== "false") && el.getAttribute("aria-expanded") !== "true";
 }
 
+function onPopState() {
+  wentBack = true;
+}
+
+// --- <select> ------------------------------------------------------------------
+// The WebView's own popup for a <select> doesn't take the remote in every
+// box (the arrows went on to the page behind it). With the remote, OK opens
+// this list instead: arrows move in it, OK picks, Back closes.
+
+/** Set a React-controlled <select> and let React know. */
+function setSelectValue(select: HTMLSelectElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function openSelectPicker(select: HTMLSelectElement) {
+  const overlay = document.createElement("div");
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.dataset.state = "open";
+  overlay.className = "fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4";
+  const box = document.createElement("div");
+  box.className = "flex max-h-[80vh] w-full max-w-sm flex-col gap-1 overflow-y-auto rounded-xl border border-border bg-card p-2 text-foreground shadow-2xl";
+  const label = select.getAttribute("aria-label") ?? select.labels?.[0]?.textContent ?? select.closest("label")?.textContent ?? "";
+  if (label.trim()) {
+    const title = document.createElement("p");
+    title.className = "px-3 pb-1 pt-2 text-sm font-semibold text-muted-foreground";
+    title.textContent = label.trim();
+    box.append(title);
+  }
+  const close = () => {
+    overlay.remove();
+    select.focus({ preventScroll: true });
+  };
+  let selected: HTMLButtonElement | null = null;
+  for (const option of select.options) {
+    if (option.hidden) continue;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.disabled = option.disabled;
+    b.textContent = option.text;
+    b.className = `rounded-lg px-3 py-2.5 text-left text-sm hover:bg-muted focus:bg-muted disabled:opacity-40 ${option.selected ? "font-semibold text-primary" : ""}`;
+    b.addEventListener("click", () => {
+      close();
+      if (select.value !== option.value) setSelectValue(select, option.value);
+    });
+    if (option.selected) selected = b;
+    box.append(b);
+  }
+  overlay.append(box);
+  overlay.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+  document.body.append(overlay);
+  const first = selected ?? box.querySelector<HTMLButtonElement>("button:not([disabled])");
+  first?.focus({ preventScroll: true });
+  first?.scrollIntoView({ block: "nearest" });
+}
+
 /** Capture phase, before the page's own handlers see the key. */
 /** An open suggestions list (search box): Back/Escape closes it first. */
 function closeOpenCombobox(): boolean {
@@ -296,6 +443,13 @@ function onKeyDownCapture(e: KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
     closeOpenCombobox();
+    return;
+  }
+  // OK on a <select>: our own list (see openSelectPicker).
+  if ((e.key === "Enter" || e.key === "NumpadEnter") && active instanceof HTMLSelectElement && !active.disabled) {
+    e.preventDefault();
+    e.stopPropagation();
+    openSelectPicker(active);
     return;
   }
   // OK on a field that's only focused: start typing (and don't submit).
@@ -321,6 +475,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  movedSincePageChange = true;
   const dir = KEYS[e.key];
   if (!dir || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
   const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -335,6 +490,8 @@ function onKeyDown(e: KeyboardEvent) {
   const current = active && active !== document.body && root.contains(active) && all.some((b) => b.el === active) ? active : null;
 
   if (!current) {
+    // A dialog just closed (saved, cancelled): back to its button.
+    if (restoreOpener()) return;
     // The focused thing went away (the page re-rendered, a row loaded):
     // carry on from where it was instead of jumping back to the top.
     const from = lastRect && lastPath === location.pathname ? lastRect : null;
@@ -343,8 +500,23 @@ function onKeyDown(e: KeyboardEvent) {
     if (first) focusEl(first, e.repeat);
     return;
   }
+  // Search suggestions: a vertical list over the page; sideways would land
+  // on something hidden under it.
+  if ((dir === "left" || dir === "right") && current.closest("[role=listbox]")) return;
   const currentRect = current.getBoundingClientRect();
-  const next = bestIn(currentRect, all, dir, current);
+  let next: HTMLElement | null;
+  if (root === document && (dir === "up" || dir === "down") && inTopBar(current)) {
+    // ↓ from the top bar: back to where you were on the page, else its
+    // first item (never somewhere halfway down).
+    next = dir === "down" ? backToPage(all) : bestIn(currentRect, all, dir, current);
+  } else if (root === document && (dir === "up" || dir === "down")) {
+    // On the page: up/down stay on it; the top bar only from its top.
+    const page = all.filter(({ el }) => !inTopBar(el));
+    next = bestIn(currentRect, page, dir, current) ?? (dir === "up" ? bestIn(currentRect, all, dir, current) : null);
+  } else {
+    next = bestIn(currentRect, all, dir, current);
+  }
+  if (next) next = preferSelectedTab(next, current);
   if (next) {
     focusEl(next, e.repeat);
   } else if (root === document && (dir === "up" || dir === "down")) {
@@ -381,9 +553,23 @@ function closeLayer(): boolean {
     return true;
   }
   const layer = document.querySelector("[role=dialog][data-state=open], [role=alertdialog][data-state=open], [role=menu][data-state=open]");
-  if (!layer) return false;
-  const target = document.activeElement ?? document.body;
-  target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+  if (layer) {
+    const target = document.activeElement ?? document.body;
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+    return true;
+  }
+  return backToTop();
+}
+
+/** Back deep down a page (like TV apps): first back to the top, where the
+ * menu is; Back again leaves the page. */
+function backToTop(): boolean {
+  if (!remoteMode() || window.scrollY < window.innerHeight * 0.75) return false;
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest("main")) return false;
+  window.scrollTo({ top: 0, behavior: "auto" });
+  const first = firstItem(candidates(document).filter((el) => el.closest("main")));
+  if (first) first.focus({ preventScroll: true });
   return true;
 }
 
@@ -400,14 +586,60 @@ export function remoteMode() {
 
 /** After a page change: put focus on the page's first item, so the first
  * press of the remote already moves (focus was on something now gone). */
+// The page's content often arrives after the page itself (catalogs load):
+// wait for it a little rather than settling on the top bar.
+const START_TRIES = 12;
+const START_EVERY_MS = 300;
+let startTimer = 0;
+
+/** The page's main action, marked with data-remote-start (the element, or
+ * the first focusable thing inside it). */
+function pageStartTarget() {
+  const mark = document.querySelector<HTMLElement>("main [data-remote-start]");
+  if (!mark) return null;
+  if (mark.matches(FOCUSABLE) && isVisible(mark)) return mark;
+  return [...mark.querySelectorAll<HTMLElement>(FOCUSABLE)].find(isVisible) ?? null;
+}
+
+function focusAndShow(el: HTMLElement) {
+  el.focus({ preventScroll: true });
+  el.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+}
+
 export function focusPageStart() {
   if (!remoteMode()) return;
-  window.setTimeout(() => {
+  window.clearTimeout(startTimer);
+  movedSincePageChange = false;
+  // Back to a page: the item you left it from (read before anything here
+  // gets focused and overwrites it).
+  const restore = wentBack ? pageFocus.get(pageKey()) : undefined;
+  wentBack = false;
+  let tries = 0;
+  let settled = false; // something of the page got the focus
+  const attempt = () => {
+    if (movedSincePageChange) return;
+    // Content arrives late (catalogs, sources): keep looking for the best
+    // target a few seconds, until the remote is used.
+    const preferred = (restore ? findByIdentity(restore) : null) ?? pageStartTarget();
+    if (preferred) {
+      if (document.activeElement !== preferred) focusAndShow(preferred);
+      return;
+    }
     const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    const first = firstItem(candidates(scope()));
-    if (first) first.focus({ preventScroll: true });
-  }, 350);
+    const hasFocus = active && active !== document.body && active.isConnected;
+    if (!settled && !hasFocus) {
+      const list = candidates(scope());
+      // Loading placeholders don't count as the page's start.
+      const ready = list.filter((el) => el.closest("main") && !el.closest("[aria-busy=true]"));
+      if (ready.length || tries >= START_TRIES - 1) {
+        const first = firstItem(ready.length ? ready : list);
+        if (first) first.focus({ preventScroll: true });
+        settled = Boolean(first);
+      }
+    }
+    if (++tries < START_TRIES) startTimer = window.setTimeout(attempt, START_EVERY_MS);
+  };
+  startTimer = window.setTimeout(attempt, 350);
 }
 
 export function installSpatialNavigation() {
@@ -417,8 +649,10 @@ export function installSpatialNavigation() {
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("focusin", rememberFocus);
   document.addEventListener("focusout", onFocusOut);
+  window.addEventListener("popstate", onPopState);
   window.__aetherBack = closeLayer;
   return () => {
+    window.removeEventListener("popstate", onPopState);
     delete document.documentElement.dataset.remote;
     window.removeEventListener("keydown", onKeyDownCapture, true);
     window.removeEventListener("keydown", onKeyDown);

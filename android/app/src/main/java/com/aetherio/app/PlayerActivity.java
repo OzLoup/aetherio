@@ -8,11 +8,14 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -37,13 +40,16 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.common.util.Util;
 import androidx.media3.ui.DefaultTimeBar;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.ui.SubtitleView;
 import androidx.media3.ui.TimeBar;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -75,6 +81,59 @@ public class PlayerActivity extends Activity {
     private boolean hasNext = false;
     private boolean backHidesControls = false;
     private Button nextOverlay;
+
+    // --- Subtitles the page downloaded, drawn here with a timing fix -------
+    /** One downloaded subtitle file (also listed in ExoPlayer's menu). */
+    private static final class ExternalTrack {
+        final String id;
+        final String label;
+        final File file;
+        volatile List<ExternalSubtitles.Cue> cues; // null until read
+
+        ExternalTrack(String id, String label, File file) {
+            this.id = id;
+            this.label = label;
+            this.file = file;
+        }
+    }
+
+    private static final String EXTERNAL_ID = "aether-ext-";
+    private static final long SUBS_EVERY_MS = 100;
+    private static final long SYNC_STEP_MS = 250;
+    private static final long SYNC_FAST_STEP_MS = 1000;
+    /** 25 fps (PAL) vs 23.976 fps (film), as in the web player. */
+    private static final double[] SYNC_SCALES = {1, 25 / 23.976, 23.976 / 25};
+    private final List<ExternalTrack> external = new ArrayList<>();
+    private int externalActive = -1;
+    private long subOffsetMs = 0;
+    private double subScale = 1;
+    private long lastNudge = 0;
+    private boolean syncPending = false;
+    private SubtitleView ownSubtitles;
+    private List<ExternalSubtitles.Cue> shownCues;
+    private View syncPanel;
+
+    private final Runnable drawSubs = new Runnable() {
+        @Override
+        public void run() {
+            drawSubtitles();
+            handler.postDelayed(this, SUBS_EVERY_MS);
+        }
+    };
+
+    /** The page saves the timing per video (like the web player). */
+    private final Runnable sendSync = () -> {
+        syncPending = false;
+        if (player == null) return;
+        try {
+            JSONObject o = new JSONObject();
+            o.put("offset", subOffsetMs / 1000.0);
+            o.put("scale", subScale);
+            long duration = player.getDuration();
+            PlayerEvents.send("subsync", player.getCurrentPosition(), duration == C.TIME_UNSET ? 0 : duration, o.toString());
+        } catch (Exception ignored) {
+        }
+    };
 
     /** Shows the big "Siguiente episodio" during the last minute. */
     private final Runnable endWatch = new Runnable() {
@@ -179,13 +238,19 @@ public class PlayerActivity extends Activity {
         trackSelector.setParameters(params.build());
 
         // Subtitles found by the page (already WebVTT, saved by MainActivity).
+        // ExoPlayer lists them in its menu; when one is chosen, this activity
+        // draws it (so its timing can be fixed on the fly).
         List<MediaItem.SubtitleConfiguration> subtitles = new ArrayList<>();
         JSONArray subs = req.optJSONArray("subtitleFiles");
         if (subs != null) {
             for (int i = 0; i < subs.length(); i++) {
                 JSONObject s = subs.optJSONObject(i);
                 if (s == null) continue;
-                subtitles.add(new MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(new File(s.optString("path"))))
+                File file = new File(s.optString("path"));
+                String id = EXTERNAL_ID + external.size();
+                external.add(new ExternalTrack(id, s.optString("label"), file));
+                subtitles.add(new MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                        .setId(id)
                         .setMimeType(MimeTypes.TEXT_VTT)
                         .setLanguage(s.optString("lang"))
                         .setLabel(s.optString("label"))
@@ -193,6 +258,14 @@ public class PlayerActivity extends Activity {
                         .build());
             }
         }
+        // Timing saved for this video (web, Mac or here): seconds, + = later.
+        JSONObject sync = req.optJSONObject("subtitleSync");
+        if (sync != null) {
+            subOffsetMs = Math.round(sync.optDouble("offset", 0) * 1000);
+            double scale = sync.optDouble("scale", 1);
+            subScale = scale > 0.5 && scale < 2 ? scale : 1;
+        }
+        setUpExternalSubtitles();
 
         String url = req.optString("url");
         MediaItem.Builder item = new MediaItem.Builder().setUri(url).setSubtitleConfigurations(subtitles);
@@ -210,6 +283,7 @@ public class PlayerActivity extends Activity {
             @Override
             public void onTracksChanged(@NonNull Tracks tracks) {
                 pickLatino(tracks);
+                updateActiveSubtitle(tracks);
             }
 
             @Override
@@ -246,6 +320,191 @@ public class PlayerActivity extends Activity {
         if (hasNext) handler.postDelayed(endWatch, 1000);
     }
 
+    // --- Downloaded subtitles: drawing and timing ---------------------------
+
+    /** Our subtitle layer (over the video, under the controls), the panel's
+     * buttons, and the files read in the background. */
+    private void setUpExternalSubtitles() {
+        syncPanel = findViewById(R.id.sync_panel);
+        if (external.isEmpty()) return;
+        ownSubtitles = new SubtitleView(this);
+        ownSubtitles.setUserDefaultStyle();
+        ownSubtitles.setUserDefaultTextSize();
+        ownSubtitles.setVisibility(View.GONE);
+        FrameLayout overlay = view.getOverlayFrameLayout();
+        if (overlay != null) {
+            overlay.addView(ownSubtitles, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+
+        Button open = findViewById(R.id.sync_subs);
+        open.setVisibility(View.VISIBLE);
+        open.setOnClickListener(v -> openSyncPanel());
+        View.OnKeyListener hold = (v, keyCode, event) -> {
+            // OK held on - / +: keeps moving, faster after a second.
+            if (keyCode != KeyEvent.KEYCODE_DPAD_CENTER && keyCode != KeyEvent.KEYCODE_ENTER
+                    && keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER) return false;
+            if (event.getAction() == KeyEvent.ACTION_DOWN) nudge(v.getId() == R.id.sync_later ? 1 : -1, event.getRepeatCount());
+            return true;
+        };
+        for (int id : new int[] {R.id.sync_earlier, R.id.sync_later}) {
+            View b = findViewById(id);
+            b.setOnClickListener(v -> nudge(v.getId() == R.id.sync_later ? 1 : -1, 0));
+            b.setOnKeyListener(hold);
+        }
+        findViewById(R.id.sync_track).setOnClickListener(v -> nextExternalTrack());
+        findViewById(R.id.sync_speed).setOnClickListener(v -> {
+            int i = 0;
+            for (int k = 0; k < SYNC_SCALES.length; k++) if (Math.abs(SYNC_SCALES[k] - subScale) < 0.001) i = k;
+            subScale = SYNC_SCALES[(i + 1) % SYNC_SCALES.length];
+            onSyncChanged();
+        });
+        findViewById(R.id.sync_reset).setOnClickListener(v -> {
+            subOffsetMs = 0;
+            subScale = 1;
+            onSyncChanged();
+        });
+        findViewById(R.id.sync_done).setOnClickListener(v -> closeSyncPanel());
+
+        List<ExternalTrack> tracks = new ArrayList<>(external);
+        new Thread(() -> {
+            for (ExternalTrack t : tracks) {
+                try {
+                    t.cues = ExternalSubtitles.read(t.file);
+                } catch (Exception e) {
+                    t.cues = Collections.emptyList();
+                }
+            }
+            handler.post(() -> {
+                shownCues = null;
+                drawSubtitles();
+            });
+        }, "subtitles").start();
+    }
+
+    /** Which downloaded subtitle a track is (-1 = inside the file, or none). */
+    private int externalIndexOf(Format f) {
+        for (int i = 0; i < external.size(); i++) {
+            if (f.id != null && f.id.endsWith(external.get(i).id)) return i;
+        }
+        // Fallback: the labels the page gives are unique ("Español 1"...).
+        for (int i = 0; i < external.size(); i++) {
+            if (f.label != null && f.label.equals(external.get(i).label)) return i;
+        }
+        return -1;
+    }
+
+    /** Chosen in the subtitle menu: one of ours, we draw it; else ExoPlayer does. */
+    private void updateActiveSubtitle(Tracks tracks) {
+        if (external.isEmpty()) return;
+        int found = -1;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+            for (int i = 0; i < group.length; i++) {
+                if (group.isTrackSelected(i)) found = externalIndexOf(group.getTrackFormat(i));
+            }
+        }
+        if (found == externalActive) return;
+        externalActive = found;
+        boolean ours = found >= 0;
+        SubtitleView playerSubs = view.getSubtitleView();
+        if (playerSubs != null) playerSubs.setVisibility(ours ? View.GONE : View.VISIBLE);
+        ownSubtitles.setVisibility(ours ? View.VISIBLE : View.GONE);
+        shownCues = null;
+        ownSubtitles.setCues(Collections.emptyList());
+        handler.removeCallbacks(drawSubs);
+        if (ours) handler.post(drawSubs);
+        updateSyncPanel();
+    }
+
+    private void drawSubtitles() {
+        if (player == null || externalActive < 0 || ownSubtitles == null) return;
+        List<ExternalSubtitles.Cue> cues = external.get(externalActive).cues;
+        if (cues == null) return; // still reading the file
+        List<ExternalSubtitles.Cue> active = ExternalSubtitles.activeAt(cues, player.getCurrentPosition(), subOffsetMs, subScale);
+        if (active.equals(shownCues)) return;
+        shownCues = active;
+        ownSubtitles.setCues(active.isEmpty()
+                ? Collections.emptyList()
+                : Collections.singletonList(new androidx.media3.common.text.Cue.Builder().setText(ExternalSubtitles.join(active)).build()));
+    }
+
+    private void openSyncPanel() {
+        if (syncPanel == null || external.isEmpty()) return;
+        view.hideController();
+        view.setUseController(false);
+        syncPanel.setVisibility(View.VISIBLE);
+        updateSyncPanel();
+        findViewById(externalActive >= 0 ? R.id.sync_later : R.id.sync_track).requestFocus();
+    }
+
+    private void closeSyncPanel() {
+        syncPanel.setVisibility(View.GONE);
+        view.setUseController(true);
+        if (syncPending) {
+            handler.removeCallbacks(sendSync);
+            sendSync.run();
+        }
+    }
+
+    private boolean syncPanelOpen() {
+        return syncPanel != null && syncPanel.getVisibility() == View.VISIBLE;
+    }
+
+    /** - / + on the panel: 0.25 s a press; held, faster after a second. */
+    private void nudge(int sign, int repeatCount) {
+        if (externalActive < 0) return;
+        long now = SystemClock.uptimeMillis();
+        if (repeatCount > 0 && now - lastNudge < 150) return;
+        lastNudge = now;
+        subOffsetMs += sign * (repeatCount > 12 ? SYNC_FAST_STEP_MS : SYNC_STEP_MS);
+        onSyncChanged();
+    }
+
+    private void onSyncChanged() {
+        updateSyncPanel();
+        shownCues = null;
+        drawSubtitles();
+        syncPending = true;
+        handler.removeCallbacks(sendSync);
+        handler.postDelayed(sendSync, 1000);
+    }
+
+    /** Next downloaded subtitle (another file often fits this video better). */
+    private void nextExternalTrack() {
+        if (player == null || external.isEmpty()) return;
+        int want = (externalActive + 1) % external.size();
+        for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+            for (int i = 0; i < group.length; i++) {
+                if (externalIndexOf(group.getTrackFormat(i)) != want) continue;
+                player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(new TrackSelectionOverride(group.getMediaTrackGroup(), i))
+                        .build());
+                return;
+            }
+        }
+    }
+
+    private void updateSyncPanel() {
+        if (syncPanel == null || external.isEmpty()) return;
+        boolean ours = externalActive >= 0;
+        TextView value = findViewById(R.id.sync_value);
+        String seconds = new DecimalFormat("0.##").format(Math.abs(subOffsetMs) / 1000.0);
+        value.setText(subOffsetMs == 0 ? getString(R.string.sync_none)
+                : getString(subOffsetMs > 0 ? R.string.sync_later : R.string.sync_earlier, seconds));
+        ((TextView) findViewById(R.id.sync_hint)).setText(ours ? R.string.sync_hint : R.string.sync_external_only);
+        findViewById(R.id.sync_earlier).setEnabled(ours);
+        findViewById(R.id.sync_later).setEnabled(ours);
+        ((Button) findViewById(R.id.sync_track)).setText(ours
+                ? getString(R.string.sync_track, external.get(externalActive).label)
+                : getString(R.string.sync_track_off));
+        int speed = R.string.sync_speed_normal;
+        if (Math.abs(subScale - SYNC_SCALES[1]) < 0.001) speed = R.string.sync_speed_slower;
+        else if (Math.abs(subScale - SYNC_SCALES[2]) < 0.001) speed = R.string.sync_speed_faster;
+        ((Button) findViewById(R.id.sync_speed)).setText(speed);
+    }
+
     private void goNext() {
         if (player == null || finishedSent) return;
         finishedSent = true;
@@ -272,7 +531,8 @@ public class PlayerActivity extends Activity {
             return;
         }
         float density = getResources().getDisplayMetrics().density;
-        for (int id : new int[] {R.id.versions, R.id.next_episode, R.id.scrub_time}) {
+        for (int id : new int[] {R.id.versions, R.id.sync_subs, R.id.next_episode, R.id.scrub_time,
+                R.id.sync_earlier, R.id.sync_later, R.id.sync_track, R.id.sync_speed, R.id.sync_reset, R.id.sync_done}) {
             findViewById(id).setBackground(topButton(accent, density));
         }
         StateListDrawable overlay = new StateListDrawable();
@@ -357,10 +617,11 @@ public class PlayerActivity extends Activity {
 
     /** Visible buttons of the top bar, left to right. */
     private View firstTopButton() {
-        View versions = findViewById(R.id.versions);
-        if (versions.getVisibility() == View.VISIBLE) return versions;
-        View next = findViewById(R.id.next_episode);
-        return next.getVisibility() == View.VISIBLE ? next : null;
+        for (int id : new int[] {R.id.versions, R.id.sync_subs, R.id.next_episode}) {
+            View b = findViewById(id);
+            if (b.getVisibility() == View.VISIBLE) return b;
+        }
+        return null;
     }
 
     /** Spanish files often carry Latino and Castilian tracks, both tagged "spa":
@@ -390,6 +651,15 @@ public class PlayerActivity extends Activity {
     /** D-pad: with the controls hidden, left/right skip 10 s and OK shows them. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // Subtitle timing panel open: the remote moves between its buttons;
+        // Back closes it (the video keeps playing).
+        if (syncPanelOpen()) {
+            if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+                if (event.getAction() == KeyEvent.ACTION_UP) closeSyncPanel();
+                return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
         // Back with the controls up (after changing subtitles, audio,
         // quality…): just hide them. Back again, with only the video on
         // screen, leaves the player. (Open settings menus close themselves.)
@@ -429,6 +699,11 @@ public class PlayerActivity extends Activity {
                 case KeyEvent.KEYCODE_MENU:
                     View menuTarget = findViewById(R.id.versions);
                     if (menuTarget.getVisibility() == View.VISIBLE) menuTarget.performClick();
+                    return true;
+                case KeyEvent.KEYCODE_CAPTIONS:
+                    // Remotes with a subtitles key: straight to the timing panel.
+                    if (external.isEmpty()) break;
+                    openSyncPanel();
                     return true;
                 default:
                     break;
@@ -498,6 +773,9 @@ public class PlayerActivity extends Activity {
         handler.removeCallbacks(tick);
         handler.removeCallbacks(endWatch);
         handler.removeCallbacks(hideScrubTime);
+        handler.removeCallbacks(drawSubs);
+        handler.removeCallbacks(sendSync);
+        if (syncPending) sendSync.run();
         if (player != null) {
             if (!finishedSent) {
                 finishedSent = true;

@@ -40,9 +40,9 @@ function HeaderSearch() {
         value={q}
         onChange={setQ}
         onSubmit={(query) => navigate(`/search?${new URLSearchParams({ q: query })}`)}
-        className="hidden w-56 md:block"
+        className="hidden w-56 min-[840px]:block"
       />
-      <NavLink to="/search" className="md:hidden" aria-label={t("Buscar")}>
+      <NavLink to="/search" className="min-[840px]:hidden" aria-label={t("Buscar")}>
         <span className="inline-flex size-9 items-center justify-center rounded-lg hover:bg-muted">
           <Search className="size-4" />
         </span>
@@ -63,7 +63,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-svh bg-background">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
+      <header data-nav-top className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:gap-4">
           <BrandLogo size="sm" className="[&>span]:hidden lg:[&>span]:inline" />
           <nav className="flex flex-1 items-center gap-1">
@@ -74,7 +74,7 @@ export function AppLayout() {
                 end
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
                   )
                 }

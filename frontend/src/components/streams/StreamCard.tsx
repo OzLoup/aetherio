@@ -35,6 +35,7 @@ export function StreamCard({
       <button
         onClick={() => onSelect(s)}
         disabled={disabled}
+        data-stream={s.stream.url ?? s.key}
         className={cn(
           "flex min-w-0 flex-1 items-start gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           disabled && "cursor-not-allowed opacity-50 hover:border-border",

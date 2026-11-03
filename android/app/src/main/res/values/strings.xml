@@ -3,4 +3,19 @@
     <string name="app_name">AetherIO</string>
     <string name="versions">Idioma y calidad</string>
     <string name="next_episode">Siguiente episodio · %1$s</string>
+    <string name="sync_subs">Sincronizar subtítulos</string>
+    <string name="sync_minus">−</string>
+    <string name="sync_plus">+</string>
+    <string name="sync_none">Sin ajuste</string>
+    <string name="sync_later">%1$s s después</string>
+    <string name="sync_earlier">%1$s s antes</string>
+    <string name="sync_hint">¿Salen antes que la voz? Usa +. ¿Después? Usa −.\nMantén OK presionado para moverlos más rápido.</string>
+    <string name="sync_external_only">Esto ajusta los subtítulos descargados. Elige uno con el botón de abajo.</string>
+    <string name="sync_track">Subtítulo: %1$s</string>
+    <string name="sync_track_off">Usar un subtítulo descargado</string>
+    <string name="sync_speed_normal">Velocidad: normal</string>
+    <string name="sync_speed_slower">Velocidad: 25 → 23.976 fps</string>
+    <string name="sync_speed_faster">Velocidad: 23.976 → 25 fps</string>
+    <string name="sync_reset">Restablecer</string>
+    <string name="sync_done">Listo</string>
 </resources>

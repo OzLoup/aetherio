@@ -13,7 +13,7 @@ import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
 import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
-import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, getSubtitleSync, retimeVtt } from "@/lib/subtitles";
+import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, getSubtitleSync, NO_SYNC, retimeVtt, saveSubtitleSync } from "@/lib/subtitles";
 import type { PlayerState } from "./Streams";
 import { t } from "@/i18n";
 
@@ -21,6 +21,8 @@ import { t } from "@/i18n";
 const SUBTITLES_WAIT_MS = 6000;
 // Torrentio's "downloading" placeholder is ~30 s; no movie/episode is this short.
 const PLACEHOLDER_MAX_S = 90;
+// The installed app moves subtitles itself (0.8.0+): send them untouched.
+const nativeSync = android?.supports("subsync") ?? false;
 
 /** The page's --primary (an oklch color) as #rrggbb, for the native player. */
 function accentHex(): string | undefined {
@@ -111,6 +113,8 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       hasVersions,
       nextEpisode: nextRef.current?.code || undefined,
       accentColor: accentHex(),
+      // Read now: the player may have changed it since the last launch.
+      subtitleSync: nativeSync ? getSubtitleSync(id) : undefined,
     });
     setStatus("playing");
   }
@@ -133,9 +137,11 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
         const loaded = await Promise.all(
           chosen.map(async (s, i): Promise<NativeSubtitle | null> => {
             try {
-              // A timing fix saved for this video (in the web/Mac player) applies here too.
-              const sync = getSubtitleSync(id);
-              return { label: `${subtitleLabel(s.lang)} ${i + 1}`, lang: s.lang, vtt: retimeVtt(await fetchSubtitleVtt(s.url), sync.offset, sync.scale) };
+              const vtt = await fetchSubtitleVtt(s.url);
+              // Older installs can't move subtitles: send them already
+              // shifted by the fix saved for this video (web/Mac player).
+              const sync = nativeSync ? NO_SYNC : getSubtitleSync(id);
+              return { label: `${subtitleLabel(s.lang)} ${i + 1}`, lang: s.lang, vtt: retimeVtt(vtt, sync.offset, sync.scale) };
             } catch {
               return null;
             }
@@ -192,6 +198,17 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       } else if (e.type === "versions") {
         void save(e.positionMs, e.durationMs, true);
         setStatus("versions");
+      } else if (e.type === "subsync") {
+        // Timing fixed in the player: remembered for this video, everywhere
+        // on this device (same as the web player's).
+        try {
+          const sync = JSON.parse(e.message ?? "{}") as { offset?: unknown; scale?: unknown };
+          if (typeof sync.offset === "number" && typeof sync.scale === "number") {
+            saveSubtitleSync(id, { offset: Math.round(sync.offset * 100) / 100, scale: sync.scale });
+          }
+        } catch {
+          // ignore a malformed message
+        }
       } else if (e.type === "error") {
         setError(e.message ?? null);
         setStatus("error");

@@ -51,7 +51,7 @@ def test_catalog_queries_provider_region_and_sort(monkeypatch):
     metas = asyncio.run(tmdb.catalog("ar", "series", "aetherio.netflix", {"genre": "Drama", "sort": "recent", "skip": "20"}))
 
     assert [m["id"] for m in metas] == ["tt1"]  # titles without IMDb id are dropped
-    path, params = calls[-1]
+    path, params = next(c for c in calls if c[0].startswith("/discover/"))
     assert path == "/discover/tv"
     assert params["with_watch_providers"] == "8" and params["watch_region"] == "AR"
     assert params["language"] == "es-AR" and params["sort_by"] == "first_air_date.desc"
@@ -114,3 +114,87 @@ def test_similar_endpoint_empty_when_off(client, monkeypatch):
     monkeypatch.setattr(settings, "tmdb_api_key", "")
     res = client.get("/stremio/tmdb/similar/movie/tt1.json")
     assert res.status_code == 200 and res.json() == {"metas": []}
+
+
+def test_search_catalog_is_search_only():
+    defs = tmdb.catalog_defs("movie", [])
+    search = next(d for d in defs if d["id"] == "aetherio.search")
+    assert search["extra"] == [{"name": "search", "isRequired": True}]
+
+
+def test_search_queries_tmdb(monkeypatch):
+    calls = []
+
+    async def fake_get(path, **params):
+        calls.append((path, params))
+        return {"results": [{"id": 5, "title": "Matrix"}]}
+
+    async def fake_ids(kind, ids):
+        return {5: "tt0133093"}
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    monkeypatch.setattr(tmdb, "imdb_ids", fake_ids)
+    metas = asyncio.run(tmdb.catalog("MX", "movie", "aetherio.search", {"search": " matrix "}))
+    assert metas[0]["id"] == "tt0133093"
+    search = next(c for c in calls if c[0].startswith("/search/"))
+    assert search[0] == "/search/movie" and search[1]["query"] == "matrix"
+    assert asyncio.run(tmdb.catalog("MX", "movie", "aetherio.search", {})) == []
+
+
+def test_series_meta_lists_episodes(monkeypatch):
+    async def fake_get(path, **params):
+        if path.startswith("/find/"):
+            return {"tv_results": [{"id": 7}]}
+        if path == "/tv/7":
+            return {"id": 7, "name": "Serie", "first_air_date": "2020-01-01", "in_production": True,
+                    "genres": [{"name": "Drama"}], "seasons": [{"season_number": 0}, {"season_number": 1}],
+                    "credits": {"cast": [{"name": "Actor"}]}, "created_by": [{"name": "Creadora"}],
+                    "videos": {"results": [{"site": "YouTube", "type": "Trailer", "key": "abc"}]}}
+        n = int(path.rsplit("/", 1)[1])
+        return {"episodes": [{"episode_number": 1, "name": f"Ep S{n}", "air_date": "2020-01-01"}]}
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    m = asyncio.run(tmdb.meta("series", "tt9", "es-MX"))
+    assert m["releaseInfo"] == "2020–" and m["cast"] == ["Actor"] and m["director"] == ["Creadora"]
+    assert m["trailerStreams"][0]["ytId"] == "abc"
+    assert [v["id"] for v in m["videos"]] == ["tt9:0:1", "tt9:1:1"]
+
+
+def test_catalog_items_carry_genre_names(monkeypatch):
+    async def fake_get(path, **params):
+        if path.startswith("/genre/"):
+            return {"genres": [{"id": 28, "name": "Acción"}]}
+        return {"results": [{"id": 1, "title": "A", "genre_ids": [28, 99]}]}
+
+    async def fake_ids(kind, ids):
+        return {1: "tt1"}
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    monkeypatch.setattr(tmdb, "imdb_ids", fake_ids)
+    metas = asyncio.run(tmdb.catalog("MX", "movie", "aetherio.trending", {}))
+    assert metas[0]["genres"] == ["Acción"]
+
+
+def test_default_addons(monkeypatch):
+    from types import SimpleNamespace
+
+    from app import addons_service
+
+    installed = []
+
+    def fake_install(db, profile, url):
+        installed.append(url)
+        return SimpleNamespace(show_catalogs=True)
+
+    class FakeDb:
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    monkeypatch.setattr(addons_service, "install", fake_install)
+    monkeypatch.setattr(settings, "tmdb_api_key", "k")
+    monkeypatch.setattr(settings, "public_url", "https://api.example")
+    addons_service.install_defaults(FakeDb(), SimpleNamespace(language="es-ES"))
+    assert installed == ["https://api.example/stremio/tmdb/ES/manifest.json", addons_service.CINEMETA_URL]

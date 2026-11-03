@@ -97,6 +97,9 @@ class ProfileAddon(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Says itself it's +18 (app/adult.py): only on profiles that allow it.
     adult: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Off: its catalogs (rows, Discover, search) are hidden, but it still
+    # serves details/streams/subtitles (e.g. Cinemeta as a backup for details).
+    show_catalogs: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     installed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     manifest_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

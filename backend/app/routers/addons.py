@@ -78,7 +78,10 @@ def update_addon(
     addon_id: int, payload: AddonUpdate, profile: Profile = Depends(get_current_profile), db: Session = Depends(get_db)
 ):
     addon = _get_owned(db, profile, addon_id)
-    addon.enabled = payload.enabled
+    if payload.enabled is not None:
+        addon.enabled = payload.enabled
+    if payload.show_catalogs is not None:
+        addon.show_catalogs = payload.show_catalogs
     db.commit()
     db.refresh(addon)
     return addon

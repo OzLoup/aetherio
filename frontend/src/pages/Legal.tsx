@@ -9,7 +9,7 @@ export default function Legal() {
   const navigate = useNavigate();
   const points = [
     t("{app} es un reproductor. No aloja, no indexa y no distribuye películas, series, canales ni ningún otro contenido.", { app: APP_NAME }),
-    t("{app} no trae preinstalado ni recomienda ningún addon, lista de canales o servicio de terceros.", { app: APP_NAME }),
+    t("{app} solo trae preinstalados addons de metadatos (información de los títulos, sin videos): sus Catálogos AetherIO y Cinemeta, de Stremio. No trae ni recomienda ningún addon de streams, lista de canales o servicio para reproducir contenido.", { app: APP_NAME }),
     t("Cada usuario elige y agrega sus propias fuentes, y es responsable de tener derecho a usarlas y de cumplir las leyes de su país y los términos de esos servicios."),
     t("Los videos van directo del servidor de cada fuente a tu dispositivo: no pasan por los servidores de {app}.", { app: APP_NAME }),
     t("Las direcciones de los addons y listas que agregas se guardan cifradas y solo se usan para tu perfil."),

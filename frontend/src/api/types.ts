@@ -55,6 +55,8 @@ export interface InstalledAddon {
   manifest: Manifest;
   position: number;
   enabled: boolean;
+  /** Off: its catalogs (rows, Discover, search) are hidden; it still serves details. */
+  show_catalogs: boolean;
   adult?: boolean;
   installed_at: string;
   manifest_updated_at: string;

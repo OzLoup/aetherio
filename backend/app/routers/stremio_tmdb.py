@@ -59,14 +59,14 @@ async def manifest(country: str):
     return JSONResponse(
         {
             "id": f"app.aetherio.tmdb.{country.lower()}",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "name": f"Catálogos AetherIO ({name})",
             "description": (
                 f"Qué hay en Netflix, Prime Video, Disney+, Max, Apple TV+ y Paramount+ en {name}, "
-                "tendencias y estrenos. Datos de TMDB y JustWatch."
+                "tendencias, estrenos, búsqueda y fichas en español. Datos de TMDB y JustWatch."
             ),
             "types": ["movie", "series"],
-            "resources": ["catalog"],
+            "resources": ["catalog", {"name": "meta", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
             "idPrefixes": ["tt"],
             "catalogs": tmdb.catalog_defs("movie", movie_genres) + tmdb.catalog_defs("series", tv_genres),
             "behaviorHints": {"configurable": False},
@@ -93,3 +93,16 @@ async def catalog(country: str, type_: str, catalog_id: str):
 @router.get("/{country}/catalog/{type_}/{catalog_id}/{extra}.json")
 async def catalog_extra(country: str, type_: str, catalog_id: str, extra: str):
     return await _catalog(country, type_, catalog_id, extra)
+
+
+@router.get("/{country}/meta/{type_}/{meta_id}.json")
+async def meta(country: str, type_: str, meta_id: str):
+    _, language = _check(country)
+    try:
+        data = await tmdb.meta(type_, meta_id, language)
+    except tmdb.TmdbError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    if data is None:
+        # Not on TMDB: the app asks the next addon.
+        raise HTTPException(404, "Título no encontrado")
+    return JSONResponse({"meta": data}, headers=HEADERS)

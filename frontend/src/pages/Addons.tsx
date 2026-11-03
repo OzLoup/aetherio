@@ -12,7 +12,7 @@ import { t } from "@/i18n";
 /** Addon manager. `/addons?install=<url>` opens the install dialog
  * pre-filled, so a Stremio install link can be pasted straight into the app. */
 export default function Addons() {
-  const { addons, loading, error, preview, install, setEnabled, move, refresh, uninstall } = useAddons();
+  const { addons, loading, error, preview, install, setEnabled, setShowCatalogs, move, refresh, uninstall } = useAddons();
   const [params, setParams] = useSearchParams();
   const installParam = params.get("install") ?? undefined;
   const [dialogOpen, setDialogOpen] = useState(Boolean(installParam));
@@ -68,6 +68,7 @@ export default function Addons() {
               isFirst={i === 0}
               isLast={i === addons.length - 1}
               onToggle={(enabled) => setEnabled(addon.id, enabled)}
+              onShowCatalogs={(show) => setShowCatalogs(addon.id, show)}
               onMove={(dir) => move(addon.id, dir)}
               onRefresh={() => refresh(addon.id)}
               onUninstall={() => uninstall(addon.id)}

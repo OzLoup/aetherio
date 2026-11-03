@@ -64,6 +64,16 @@ function useAddonsState() {
     }
   }
 
+  async function setShowCatalogs(id: number, show_catalogs: boolean) {
+    setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, show_catalogs } : a)));
+    try {
+      await api.patch(`/addons/${id}`, { show_catalogs });
+    } catch (err) {
+      await reload();
+      throw err;
+    }
+  }
+
   async function move(id: number, direction: -1 | 1) {
     const index = addons.findIndex((a) => a.id === id);
     const target = index + direction;
@@ -97,11 +107,16 @@ function useAddonsState() {
     () =>
       addons
         .filter((a) => a.enabled)
-        .map((a) => ({ id: a.id, transportUrl: a.transport_url, manifest: a.manifest })),
+        .map((a) => ({
+          id: a.id,
+          transportUrl: a.transport_url,
+          // "Mostrar sus catálogos" off: no rows, Discover or search from it.
+          manifest: a.show_catalogs === false ? { ...a.manifest, catalogs: [] } : a.manifest,
+        })),
     [addons],
   );
 
-  return { addons, active, loading, error, reload, preview, install, setEnabled, move, refresh, uninstall };
+  return { addons, active, loading, error, reload, preview, install, setEnabled, setShowCatalogs, move, refresh, uninstall };
 }
 
 export type ActiveAddon = AddonRef & { id: number };

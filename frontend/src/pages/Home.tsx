@@ -30,8 +30,14 @@ export default function Home() {
     );
   }
   if (rows.length === 0) return <SuggestedAddons />;
-  // Hero: the first "Popular" movies catalog if there is one, else the first row.
-  const featured = rows.find((r) => r.catalog.type === "movie" && r.catalog.id === "top") ?? rows[0];
+  // Hero: Cinemeta's "Popular" movies, else our "Tendencias" (works without
+  // Cinemeta), else the first movie catalog, else the first row.
+  const movies = rows.filter((r) => r.catalog.type === "movie");
+  const featured =
+    movies.find((r) => r.catalog.id === "top") ??
+    movies.find((r) => r.catalog.id === "aetherio.trending") ??
+    movies[0] ??
+    rows[0];
 
   return (
     <div className="flex flex-col gap-8">

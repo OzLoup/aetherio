@@ -149,6 +149,7 @@ export const en: Record<string, string> = {
   "Siguiente episodio": "Next episode",
   "Buscando la mejor fuente…": "Finding the best source…",
   "Elegir yo": "Let me choose",
+  "Cargando {title}": "Loading {title}",
   "Serie": "Series",
   "Ver todos los resultados de “{query}”": "See all results for “{query}”",
   "Según la bandera del addon, sin confirmar: puede ser el idioma de los subtítulos y no del audio": "From the addon's flag, unconfirmed: it may be the subtitles' language, not the audio's",

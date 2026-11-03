@@ -87,10 +87,15 @@ export function SearchSuggest({ value, onChange, onSubmit, className, inputClass
     if (query) onSubmit(query);
   }
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape" && showList) {
       e.preventDefault();
       setOpen(false);
+      setHighlight(-1);
+      // Focus was on a suggestion (TV remote): back to the box.
+      if (boxRef.current?.querySelector("[role=listbox]")?.contains(document.activeElement)) inputRef.current?.focus();
       return;
     }
     // TV remote: the arrows move focus into the list (lib/spatialNav).
@@ -103,10 +108,18 @@ export function SearchSuggest({ value, onChange, onSubmit, className, inputClass
   }
 
   return (
-    <div ref={boxRef} className={cn("relative", className)}>
+    <div
+      ref={boxRef}
+      className={cn("relative", className)}
+      // Focus moved somewhere else (remote/keyboard): close the list.
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <form onSubmit={submit} role="search">
         <SearchIcon className={cn("pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground", iconClassName)} />
         <Input
+          ref={inputRef}
           type="search"
           value={value}
           onChange={(e) => {
@@ -114,7 +127,9 @@ export function SearchSuggest({ value, onChange, onSubmit, className, inputClass
             onChange(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => typed.current && setOpen(true)}
+          // Reopen on click/tap only: refocusing after Back/Escape must not
+          // bring the list right back.
+          onClick={() => typed.current && setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder ?? t("Buscar")}
           className={cn("pl-8", inputClassName)}

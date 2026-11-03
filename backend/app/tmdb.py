@@ -189,7 +189,7 @@ def page_for(skip: int) -> int:
     return -(-max(skip, 0) // PAGE_SIZE) + 1
 
 
-def to_meta(item: dict, type_: str, imdb: str) -> dict:
+def to_meta(item: dict, type_: str, imdb: str, genre_names: dict[int, str] | None = None) -> dict:
     name = item.get("title") or item.get("name") or ""
     released = item.get("release_date") or item.get("first_air_date") or ""
     meta = {"id": imdb, "type": type_, "name": name}
@@ -203,6 +203,8 @@ def to_meta(item: dict, type_: str, imdb: str) -> dict:
         meta["releaseInfo"] = released[:4]
     if item.get("vote_count", 0) >= 20 and item.get("vote_average"):
         meta["imdbRating"] = f"{item['vote_average']:.1f}"
+    if genre_names and item.get("genre_ids"):
+        meta["genres"] = [genre_names[g] for g in item["genre_ids"] if g in genre_names]
     return meta
 
 
@@ -265,7 +267,11 @@ async def catalog(country: str, type_: str, catalog_id: str, extra: dict[str, st
 
     items = [i for i in data.get("results", []) if i.get("id")]
     ids = await imdb_ids(kind, [i["id"] for i in items])
-    return [to_meta(i, type_, ids[i["id"]]) for i in items if i["id"] in ids]
+    try:
+        names = {gid: name for name, gid in (await genres(kind, language)).items()}
+    except TmdbError:
+        names = {}
+    return [to_meta(i, type_, ids[i["id"]], names) for i in items if i["id"] in ids]
 
 
 # --- similar titles (detail page) ------------------------------------------------

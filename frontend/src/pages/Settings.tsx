@@ -1,7 +1,7 @@
 import { Check, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, getErrorDetail } from "@/api/client";
+import { api, getErrorDetail, setToken } from "@/api/client";
 import { PROFILE_COLORS, type ProfileSettings } from "@/api/types";
 import { APP_NAME } from "@/components/BrandLogo";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
@@ -92,7 +92,12 @@ export default function Settings() {
     setError(null);
     setPwState("saving");
     try {
-      await api.post("/auth/password", { current_password: pw.current || null, new_password: pw.next });
+      // Other sessions are signed out; this one continues with the new token.
+      const { data } = await api.post<{ access_token: string }>("/auth/password", {
+        current_password: pw.current || null,
+        new_password: pw.next,
+      });
+      if (data?.access_token) setToken(data.access_token);
       setPw({ current: "", next: "" });
       setPwState("done");
       await refresh();

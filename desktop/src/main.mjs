@@ -88,11 +88,21 @@ function serveUi() {
   protocol.handle("app", (request) => {
     const { pathname } = new URL(request.url);
     let file = path.normalize(path.join(uiDir, decodeURIComponent(pathname)));
-    if (!file.startsWith(uiDir)) return new Response("Forbidden", { status: 403 });
+    // Inside ui/ only (a bare prefix check would also let "ui-other/" through).
+    if (file !== uiDir && !file.startsWith(uiDir + path.sep)) return new Response("Forbidden", { status: 403 });
     // Unknown paths are client-side routes: hand them the SPA.
     if (!existsSync(file) || statSync(file).isDirectory()) file = path.join(uiDir, "index.html");
     return net.fetch(pathToFileURL(file).toString());
   });
+}
+
+function isAppUrl(url) {
+  if (app.isPackaged) return url.startsWith("app://ui/");
+  try {
+    return new URL(url).origin === new URL(DEV_URL).origin;
+  } catch {
+    return false;
+  }
 }
 
 function createWindow() {
@@ -124,6 +134,14 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: "deny" };
+  });
+  // The window only ever shows the app: any other page (a link that would
+  // navigate away) goes to the browser. Otherwise that page would get the
+  // app's bridge (local video server, casting).
+  win.webContents.on("will-navigate", (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
   });
   win.loadURL(app.isPackaged ? "app://ui/" : DEV_URL);
 }

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app import addons_service
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.ratelimit import SlidingWindow, client_ip, too_many
 from app.config import settings
 from app.database import get_db
 from app.models import Profile, User
@@ -12,6 +13,15 @@ from app.parental import check_pin
 from app.schemas import PasswordChange, PinSet, PinVerify, Token, UserCreate, UserLogin, UserOut, UserUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Password guessing: per account and per address; sign-up spam per address.
+_login_by_email = SlidingWindow(limit=10, seconds=15 * 60)
+_login_by_ip = SlidingWindow(limit=30, seconds=15 * 60)
+_register_by_ip = SlidingWindow(limit=5, seconds=60 * 60)
+
+
+def token_for(user: User) -> Token:
+    return Token(access_token=create_access_token(user.email, user.token_version or 0))
 
 oauth = OAuth()
 oauth.register(
@@ -32,7 +42,11 @@ def _first_profile(user: User) -> Profile:
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)):
+def register(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    if _register_by_ip.blocked(ip):
+        raise too_many()
+    _register_by_ip.hit(ip)
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Ese email ya está registrado")
 
@@ -44,16 +58,21 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     addons_service.install_defaults(db, profile)
 
-    return Token(access_token=create_access_token(user.email))
+    return token_for(user)
 
 
 @router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
+    email_key, ip = payload.email.lower(), client_ip(request)
+    if _login_by_email.blocked(email_key) or _login_by_ip.blocked(ip):
+        raise too_many()
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
+        _login_by_email.hit(email_key)
+        _login_by_ip.hit(ip)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-
-    return Token(access_token=create_access_token(user.email))
+    _login_by_email.reset(email_key)
+    return token_for(user)
 
 
 def _user_out(user: User) -> UserOut:
@@ -80,13 +99,17 @@ def update_me(payload: UserUpdate, current_user: User = Depends(get_current_user
     return _user_out(current_user)
 
 
-@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/password", response_model=Token)
 def change_password(payload: PasswordChange, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Signs out every other session (old tokens stop working) and returns a
+    new token for this one."""
     if current_user.hashed_password:
         if not payload.current_password or not verify_password(payload.current_password, current_user.hashed_password):
             raise HTTPException(status_code=400, detail="La contraseña actual no es correcta")
     current_user.hashed_password = hash_password(payload.new_password)
+    current_user.token_version = (current_user.token_version or 0) + 1
     db.commit()
+    return token_for(current_user)
 
 
 # ---------- Google OAuth2 ----------
@@ -146,7 +169,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         db.commit()
 
     # Token in the URL fragment: never reaches server logs or browser history.
-    return _login_redirect(client, f"token={create_access_token(user.email)}")
+    return _login_redirect(client, f"token={create_access_token(user.email, user.token_version or 0)}")
 
 
 # ---------- Parental control PIN ----------

@@ -110,7 +110,16 @@ async def upload_avatar(
 ):
     """Raw image bytes in the body (already cropped and resized by the app)."""
     profile = _get_owned(db, user, profile_id)
-    data = await request.body()
+    too_big = HTTPException(status_code=400, detail="La foto debe pesar menos de 300 KB")
+    declared = request.headers.get("content-length")
+    if declared and (not declared.isdigit() or int(declared) > MAX_AVATAR_BYTES):
+        raise too_big
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > MAX_AVATAR_BYTES:
+            raise too_big
+    data = bytes(data)
     if not data or len(data) > MAX_AVATAR_BYTES:
         raise HTTPException(status_code=400, detail="La foto debe pesar menos de 300 KB")
     mime = _image_type(data)

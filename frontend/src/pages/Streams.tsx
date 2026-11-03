@@ -20,6 +20,7 @@ import { gaveShortClip, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
 import { addonsFor, getStreams, type AddonResult, type Stream } from "@/lib/stremio";
+import { isWebUrl } from "@/lib/utils";
 import { t } from "@/i18n";
 
 export interface PlayerState {
@@ -214,7 +215,8 @@ export default function Streams() {
     } else if (s.kind === "youtube") {
       window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(s.stream.ytId!)}`, "_blank", "noreferrer");
     } else if (s.kind === "external") {
-      window.open(s.stream.externalUrl, "_blank", "noreferrer");
+      // Addon-provided: only real web links (never javascript:, data:…).
+      if (isWebUrl(s.stream.externalUrl)) window.open(s.stream.externalUrl, "_blank", "noreferrer");
     } else if (s.kind === "direct" || s.kind === "hls") {
       start(s);
     }

@@ -1,0 +1,16 @@
+# Cloudflare Pages response headers.
+#
+# Security for every page. The CSP only lets scripts come from this site and
+# Google Cast's sender (gstatic); data can come from anywhere (addons are
+# arbitrary servers, videos too), so connect/img/media stay open.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; connect-src *; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' https://www.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Built files have a content hash in their name: cache them for a year.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

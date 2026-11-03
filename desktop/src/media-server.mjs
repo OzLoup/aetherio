@@ -107,6 +107,14 @@ export function summarizeProbe(data) {
 }
 
 /** ffmpeg arguments for /stream. */
+// ffmpeg/ffprobe read only from the web: never local files (file://,
+// concat:, a playlist pointing at file:///…), whatever an addon sends.
+export const PROTOCOLS = ["-protocol_whitelist", "http,https,tcp,tls,crypto"];
+
+export function isWebSource(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
 export function streamArgs({ url, headers, audio = 0, start = 0, videoMode = "copy", videoCodec, format = "mp4" }) {
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin"];
   const h = headerArg(headers);
@@ -123,7 +131,7 @@ export function streamArgs({ url, headers, audio = 0, start = 0, videoMode = "co
     if (videoMode !== "h264") args.push("-noaccurate_seek");
     args.push("-ss", String(start)); // before -i: fast seek
   }
-  args.push("-i", url, "-map", "0:v:0", "-map", `0:a:${audio}?`, "-sn", "-dn");
+  args.push(...PROTOCOLS, "-i", url, "-map", "0:v:0", "-map", `0:a:${audio}?`, "-sn", "-dn");
   if (videoMode === "h264") {
     // Hardware encoder on Apple Silicon/Intel Macs: for codecs the player
     // can't decode at all.
@@ -156,7 +164,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
       const args = ["-v", "error", "-print_format", "json", "-show_format", "-show_streams"];
       const h = headerArg(headers);
       if (h) args.push("-headers", h);
-      args.push(url);
+      args.push(...PROTOCOLS, url);
       const p = track(spawn(ffprobePath, args));
       let out = "";
       let err = "";
@@ -185,7 +193,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
       const args = ["-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey"];
       const h = headerArg(headers);
       if (h) args.push("-headers", h);
-      args.push("-read_intervals", `${from}%${ss + 0.5}`, "-show_entries", "frame=best_effort_timestamp_time,pts_time", "-of", "json", url);
+      args.push("-read_intervals", `${from}%${ss + 0.5}`, "-show_entries", "frame=best_effort_timestamp_time,pts_time", "-of", "json", ...PROTOCOLS, url);
       const p = track(spawn(ffprobePath, args));
       let out = "";
       const timer = setTimeout(() => p.kill("SIGKILL"), PROBE_TIMEOUT_MS);
@@ -250,6 +258,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
     }
     if (u.searchParams.get("t") !== token) return sendJson(res, 403, { error: "bad token" });
     const url = u.searchParams.get("u");
+    if (url !== null && !isWebSource(url)) return sendJson(res, 400, { error: "only http(s) sources" });
     if (!url || !/^https?:\/\//i.test(url)) return sendJson(res, 400, { error: "missing url" });
     const headers = decodeHeaders(u.searchParams.get("h"));
 
@@ -277,7 +286,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
         const args = ["-hide_banner", "-loglevel", "error", "-nostdin"];
         const h = headerArg(headers);
         if (h) args.push("-headers", h);
-        args.push("-i", url, "-map", `0:s:${s}`, "-f", "webvtt", "pipe:1");
+        args.push(...PROTOCOLS, "-i", url, "-map", `0:s:${s}`, "-f", "webvtt", "pipe:1");
         return pipeFfmpeg(req, res, args, "text/vtt; charset=utf-8");
       }
       sendJson(res, 404, { error: "not found" });
@@ -342,6 +351,7 @@ export function startMediaServer({ ffmpegPath, ffprobePath, log = console }) {
           seekpoint: (url, headers, ss) => (ss > 0 ? seekpoint(url, headers, ss) : Promise.resolve(0)),
           /** Make a stream reachable by a TV on the LAN. */
           registerCast({ url, headers, audio = 0, start = 0, videoMode = "copy", videoCodec, format = "mp4", vtt }) {
+            if (!isWebSource(url)) throw new Error("Solo se pueden transmitir fuentes web (http/https)");
             const host = lanAddress();
             if (!host) throw new Error("No encontramos la red local del Mac (¿Wi-Fi apagado?)");
             const id = randomBytes(12).toString("base64url");

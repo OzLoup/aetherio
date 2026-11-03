@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Open connections early: the API and TMDB's posters are needed first. -->
+    <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
+    <link rel="preconnect" href="https://image.tmdb.org" />
     <title>AetherIO</title>
   </head>
   <body>

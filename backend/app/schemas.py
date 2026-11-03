@@ -8,13 +8,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, fie
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=200)
     name: str | None = None
 
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(max_length=200)
 
 
 class UserOut(BaseModel):

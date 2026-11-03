@@ -4,6 +4,7 @@ Installed like any other addon (one per profile, so each profile picks its
 country). Public and read-only: only TMDB metadata, no user data.
 """
 
+import re
 from urllib.parse import parse_qsl, unquote
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,17 @@ from fastapi.responses import JSONResponse
 from app import tmdb
 
 router = APIRouter(prefix="/stremio/tmdb", tags=["stremio"])
+
+# Public routes: only well-formed values reach TMDB (an id is part of its URL).
+IMDB_ID = re.compile(r"^tt\d{1,12}$")
+QUERY_MAX = 100
+EXTRA_MAX = 500
+
+
+def _imdb(value: str) -> str:
+    if not IMDB_ID.match(value):
+        raise HTTPException(404, "Título no encontrado")
+    return value
 
 # Any app (Stremio too) may read it; cached by browsers/CDNs for an hour.
 HEADERS = {"Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=3600"}
@@ -37,6 +49,7 @@ def countries():
 
 @router.get("/suggest.json")
 async def suggest(q: str = "", lang: str = "es-419"):
+    q = q[:QUERY_MAX]
     """Suggestions while typing in a search box. Empty when the catalogs are
     off or nothing matches (the box then just shows no list)."""
     if not tmdb.enabled():
@@ -53,6 +66,8 @@ async def similar(type_: str, imdb_id: str, lang: str = "es-419"):
     """"Títulos similares" on a detail page. Empty when the catalogs are off
     or TMDB doesn't know the title (the page then hides the row)."""
     if not tmdb.enabled():
+        return JSONResponse({"metas": []}, headers=HEADERS)
+    if not IMDB_ID.match(imdb_id):
         return JSONResponse({"metas": []}, headers=HEADERS)
     try:
         metas = await tmdb.similar(type_, imdb_id, lang)
@@ -92,7 +107,11 @@ async def manifest(country: str):
 
 async def _catalog(country: str, type_: str, catalog_id: str, extra: str = ""):
     _check(country)
+    if len(extra) > EXTRA_MAX:
+        raise HTTPException(400, "Parámetros demasiado largos")
     extras = dict(parse_qsl(unquote(extra), keep_blank_values=False))
+    if "search" in extras:
+        extras["search"] = extras["search"][:QUERY_MAX]
     try:
         metas = await tmdb.catalog(country, type_, catalog_id, extras)
     except tmdb.TmdbError as exc:
@@ -114,7 +133,7 @@ async def catalog_extra(country: str, type_: str, catalog_id: str, extra: str):
 async def meta(country: str, type_: str, meta_id: str):
     _, language = _check(country)
     try:
-        data = await tmdb.meta(type_, meta_id, language)
+        data = await tmdb.meta(type_, _imdb(meta_id), language)
     except tmdb.TmdbError as exc:
         raise HTTPException(502, str(exc)) from exc
     if data is None:

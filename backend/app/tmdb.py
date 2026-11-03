@@ -377,7 +377,13 @@ async def meta(type_: str, imdb_id: str, language: str) -> dict | None:
             videos.append(v)
         return videos
 
-    out["videos"] = [v for chunk in await asyncio.gather(*(season(n) for n in seasons)) for v in chunk]
+    limit = asyncio.Semaphore(6)
+
+    async def limited(n: int) -> list[dict]:
+        async with limit:
+            return await season(n)
+
+    out["videos"] = [v for chunk in await asyncio.gather(*(limited(n) for n in seasons)) for v in chunk]
     return out
 
 

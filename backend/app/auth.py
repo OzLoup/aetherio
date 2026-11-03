@@ -22,18 +22,24 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(subject: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": subject, "exp": expire}
+def create_access_token(subject: str, version: int = 0) -> str:
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.access_token_expire_minutes)
+    payload = {"sub": subject, "exp": expire, "iat": now, "ver": version}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> str | None:
+def decode_access_token(token: str) -> tuple[str, int] | None:
+    """(email, token version). Tokens from before versions count as 0."""
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        return payload.get("sub")
     except JWTError:
         return None
+    sub = payload.get("sub")
+    ver = payload.get("ver", 0)
+    if not isinstance(sub, str) or not isinstance(ver, int):
+        return None
+    return sub, ver
 
 
 def get_current_user(
@@ -48,12 +54,14 @@ def get_current_user(
     if token is None:
         raise credentials_exception
 
-    email = decode_access_token(token)
-    if email is None:
+    decoded = decode_access_token(token)
+    if decoded is None:
         raise credentials_exception
+    email, version = decoded
 
     user = db.query(User).filter(User.email == email).first()
-    if user is None:
+    # A password change bumps token_version: older sessions are out.
+    if user is None or version != (user.token_version or 0):
         raise credentials_exception
     return user
 

@@ -358,8 +358,22 @@ function onKeyDown(e: KeyboardEvent) {
 
 /** Back button on the remote: stop typing, then close the open
  * menu/dialog, before leaving the page. */
+// Screens that answer Back themselves while shown (newest first), e.g.
+// the Android player's "Idioma y calidad" list → back to the video.
+const backHandlers: (() => boolean)[] = [];
+
+/** Take the remote's Back while mounted; return the function to release it. */
+export function onRemoteBack(handler: () => boolean) {
+  backHandlers.unshift(handler);
+  return () => {
+    const i = backHandlers.indexOf(handler);
+    if (i >= 0) backHandlers.splice(i, 1);
+  };
+}
+
 function closeLayer(): boolean {
   if (closeOpenCombobox()) return true;
+  for (const handler of backHandlers) if (handler()) return true;
   const active = document.activeElement;
   if (isTextField(active) && isEditing(active) && active.dataset.remoteEditing !== undefined) {
     delete active.dataset.remoteEditing;

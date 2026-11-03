@@ -73,6 +73,7 @@ public class PlayerActivity extends Activity {
     private boolean audioChecked = false;
     private boolean finishedSent = false;
     private boolean hasNext = false;
+    private boolean backHidesControls = false;
     private Button nextOverlay;
 
     /** Shows the big "Siguiente episodio" during the last minute. */
@@ -389,6 +390,19 @@ public class PlayerActivity extends Activity {
     /** D-pad: with the controls hidden, left/right skip 10 s and OK shows them. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // Back with the controls up (after changing subtitles, audio,
+        // quality…): just hide them. Back again, with only the video on
+        // screen, leaves the player. (Open settings menus close themselves.)
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                backHidesControls = view.isControllerFullyVisible();
+                if (backHidesControls) return true;
+            } else if (event.getAction() == KeyEvent.ACTION_UP && backHidesControls) {
+                backHidesControls = false;
+                view.hideController();
+                return true;
+            }
+        }
         // OK on the remote with the big "Siguiente episodio" up: go.
         if (nextOverlay != null && nextOverlay.getVisibility() == View.VISIBLE && !view.isControllerFullyVisible()
                 && event.getAction() == KeyEvent.ACTION_DOWN

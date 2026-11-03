@@ -7,6 +7,7 @@ import { useProfiles } from "@/context/ProfileContext";
 import { useAddons } from "@/hooks/useAddons";
 import { useNextEpisode } from "@/hooks/useNextEpisode";
 import { android, type NativeSubtitle } from "@/lib/android";
+import { onRemoteBack } from "@/lib/spatialNav";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
 import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
@@ -156,6 +157,18 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
     // Once per stream (the page remounts for another one).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Back on the "Idioma y calidad" list: back to the video, same minute
+  // (instead of leaving the title).
+  useEffect(() => {
+    if (status !== "versions") return;
+    return onRemoteBack(() => {
+      launch(subsRef.current, positionRef.current);
+      return true;
+    });
+    // launch reads refs; re-register only when the screen changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   useEffect(() => {
     if (!android) return;

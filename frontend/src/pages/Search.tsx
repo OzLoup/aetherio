@@ -1,9 +1,8 @@
-import { Search as SearchIcon } from "lucide-react";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CatalogRow } from "@/components/catalog/CatalogRow";
 import { SuggestedAddons } from "@/components/catalog/SuggestedAddons";
-import { Input } from "@/components/ui/input";
+import { SearchSuggest } from "@/components/catalog/SearchSuggest";
 import { useAddons } from "@/hooks/useAddons";
 import { typeLabel } from "@/lib/labels";
 import { searchCatalogs } from "@/lib/stremio";
@@ -17,26 +16,18 @@ export default function Search() {
   const [draft, setDraft] = useState(query);
   const catalogs = searchCatalogs(active);
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const q = draft.trim();
-    setParams(q ? { q } : {}, { replace: false });
-  }
 
   return (
     <div className="flex flex-col gap-6">
-      <form onSubmit={handleSubmit} className="relative">
-        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={t("Buscar películas, series...")}
-          className="h-12 pl-10 text-base"
-          autoFocus={!query}
-          aria-label={t("Buscar")}
-        />
-      </form>
+      <SearchSuggest
+        value={draft}
+        onChange={setDraft}
+        onSubmit={(q) => setParams(q ? { q } : {}, { replace: false })}
+        placeholder={t("Buscar películas, series...")}
+        inputClassName="h-12 pl-10 text-base"
+        iconClassName="left-3 size-5"
+        autoFocus={!query}
+      />
 
       {!loading && active.length === 0 ? (
         <SuggestedAddons />

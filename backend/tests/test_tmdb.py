@@ -198,3 +198,23 @@ def test_default_addons(monkeypatch):
     monkeypatch.setattr(settings, "public_url", "https://api.example")
     addons_service.install_defaults(FakeDb(), SimpleNamespace(language="es-ES"))
     assert installed == ["https://api.example/stremio/tmdb/ES/manifest.json", addons_service.CINEMETA_URL]
+
+
+def test_suggest_mixes_movies_and_series(monkeypatch):
+    async def fake_get(path, **params):
+        assert path == "/search/multi"
+        return {"results": [
+            {"id": 1, "media_type": "movie", "title": "Matrix", "release_date": "1999-03-31"},
+            {"id": 2, "media_type": "person", "name": "Keanu"},
+            {"id": 3, "media_type": "tv", "name": "Matrix: la serie"},
+            {"id": 4, "media_type": "movie", "title": "Sin IMDb"},
+        ]}
+
+    async def fake_ids(kind, ids):
+        return {1: "tt1"} if kind == "movie" else {3: "tt3"}
+
+    monkeypatch.setattr(tmdb, "_get", fake_get)
+    monkeypatch.setattr(tmdb, "imdb_ids", fake_ids)
+    metas = asyncio.run(tmdb.suggest("matrix", "es-419"))
+    assert [(m["id"], m["type"]) for m in metas] == [("tt1", "movie"), ("tt3", "series")]
+    assert asyncio.run(tmdb.suggest("m", "es-419")) == []

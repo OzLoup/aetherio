@@ -139,7 +139,7 @@ function DetailView({ meta, source, onBack }: { meta: MetaDetail; source?: strin
             <div className="flex flex-wrap gap-2">
               {!isSeries && (
                 <>
-                  <Link to={streamsPath(meta.type, movieVideoId, meta.name, movieCtx)} className={buttonVariants({ size: "lg" })}>
+                  <Link to={streamsPath(meta.type, movieVideoId, meta.name, movieCtx)} className={buttonVariants({ size: "lg" })} data-remote-start>
                     <Play className="fill-current" />
                     {movieResume ? t("Continuar ({time})", { time: formatTime(movieResume) }) : t("Ver ahora")}
                   </Link>

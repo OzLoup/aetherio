@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
         setContentView(web);
         web.requestFocus();
 
+        if (BuildConfig.WEB_DEBUG) WebView.setWebContentsDebuggingEnabled(true);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -233,6 +234,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String version() {
             return BuildConfig.VERSION_NAME;
+        }
+
+        /** What this build can do (JSON list), for the page to adapt to
+         * older installs. subsync = the player fixes subtitle timing itself. */
+        @JavascriptInterface
+        public String features() {
+            return "[\"subsync\"]";
         }
 
         /** Subtitles come as WebVTT text; they go to files so the Intent stays small. */

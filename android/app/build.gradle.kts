@@ -7,6 +7,8 @@ plugins {
 
 // The web UI the app shows. Override for testing: ./gradlew assembleRelease -PwebUrl=http://192.168.1.10:5173
 val webUrl = (project.findProperty("webUrl") as String?) ?: "https://aetherio-2y3.pages.dev"
+// Test builds only: -PwebDebug=true lets Chrome DevTools inspect the WebView.
+val webDebug = (project.findProperty("webDebug") as String?) == "true"
 val media3 = "1.9.0"
 
 android {
@@ -17,9 +19,10 @@ android {
         applicationId = "com.aetherio.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 13
+        versionName = "0.8.0"
         buildConfigField("String", "WEB_URL", "\"$webUrl\"")
+        buildConfigField("boolean", "WEB_DEBUG", "$webDebug")
     }
 
     buildFeatures {
@@ -61,4 +64,6 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3")
     // Software decoders (AC3, E-AC3, DTS, TrueHD…) for boxes without them.
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:$media3+1")
+
+    testImplementation("junit:junit:4.13.2")
 }

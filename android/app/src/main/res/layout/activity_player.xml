@@ -49,6 +49,14 @@
             android:textSize="15sp"
             android:visibility="gone" />
 
+        <!-- Subtitle timing (only with subtitles the page downloaded). -->
+        <Button
+            android:id="@+id/sync_subs"
+            style="@style/PlayerTopButton"
+            android:layout_marginStart="12dp"
+            android:text="@string/sync_subs"
+            android:visibility="gone" />
+
         <!-- Next episode, any time (series only). -->
         <Button
             android:id="@+id/next_episode"
@@ -78,6 +86,108 @@
         android:textSize="32sp"
         android:textStyle="bold"
         android:visibility="gone" />
+
+    <!-- Subtitle timing panel: at the top, so the subtitles stay in sight
+         while they're moved. The video keeps playing. -->
+    <LinearLayout
+        android:id="@+id/sync_panel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/panel"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/sync_subs"
+            android:textColor="#B3FFFFFF"
+            android:textSize="14sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/sync_earlier"
+                style="@style/PlayerTopButton"
+                android:minWidth="64dp"
+                android:text="@string/sync_minus"
+                android:textSize="22sp" />
+
+            <TextView
+                android:id="@+id/sync_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:minWidth="190dp"
+                android:paddingHorizontal="12dp"
+                android:textColor="@android:color/white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/sync_later"
+                style="@style/PlayerTopButton"
+                android:minWidth="64dp"
+                android:text="@string/sync_plus"
+                android:textSize="22sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/sync_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:maxWidth="420dp"
+            android:text="@string/sync_hint"
+            android:textColor="#B3FFFFFF"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/sync_track"
+                style="@style/PlayerTopButton" />
+
+            <Button
+                android:id="@+id/sync_speed"
+                style="@style/PlayerTopButton"
+                android:layout_marginStart="10dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/sync_reset"
+                style="@style/PlayerTopButton"
+                android:text="@string/sync_reset" />
+
+            <Button
+                android:id="@+id/sync_done"
+                style="@style/PlayerTopButton"
+                android:layout_marginStart="10dp"
+                android:text="@string/sync_done" />
+        </LinearLayout>
+    </LinearLayout>
 
     <!-- Same, big, during the last minute (credits) and when it ends. -->
     <Button

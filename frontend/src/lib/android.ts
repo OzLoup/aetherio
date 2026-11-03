@@ -11,6 +11,8 @@ interface AndroidBridge {
   play(request: string): void;
   isTv(): boolean;
   version(): string;
+  /** JSON list of features; missing on installs older than 0.8.0. */
+  features?(): string;
 }
 
 export interface NativeSubtitle {
@@ -37,12 +39,16 @@ export interface NativePlayRequest {
   accentColor?: string;
   /** "Siguiente episodio" button label (e.g. "T1E3"); absent = no next episode. */
   nextEpisode?: string;
+  /** Subtitle timing to start with (feature "subsync": the subtitles go
+   * as they are and the player moves them). */
+  subtitleSync?: { offset: number; scale: number };
 }
 
 /** Sent by the native player: every ~15 s, on pause, and when closing. */
 export interface NativePlayerEvent {
-  /** versions = the user asked for another language/quality; next = next episode. */
-  type: "progress" | "closed" | "error" | "versions" | "next";
+  /** versions = the user asked for another language/quality; next = next
+   * episode; subsync = new subtitle timing (message: {"offset", "scale"}). */
+  type: "progress" | "closed" | "error" | "versions" | "next" | "subsync";
   positionMs: number;
   durationMs: number;
   message?: string;
@@ -56,6 +62,15 @@ declare global {
 
 const bridge = typeof window === "undefined" ? undefined : window.AetherAndroid;
 
+function features(): string[] {
+  try {
+    const list: unknown = JSON.parse(bridge?.features?.() ?? "[]");
+    return Array.isArray(list) ? list.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function listen<T>(name: string, callback: (detail: T) => void) {
   const listener = (e: Event) => callback((e as CustomEvent<T>).detail);
   window.addEventListener(name, listener);
@@ -66,6 +81,8 @@ export const android = bridge
   ? {
       isTv: () => bridge.isTv(),
       version: () => bridge.version(),
+      /** Whether the installed app has a feature (older installs lack some). */
+      supports: (feature: "subsync") => features().includes(feature),
       openExternal: async (url: string) => bridge.openExternal(url),
       /** Google login result coming back through aetherio:// (same shape as the Mac app). */
       onAuth: (callback: (payload: { token: string | null; error: string | null }) => void) =>

@@ -201,3 +201,13 @@ html[data-remote] a:focus [class*="aspect-"] {
 html[data-remote] {
   scroll-padding-top: 5rem;
 }
+/* Rows scroll to the focused poster; snapping on top of that made them
+   jump to a neighbour. */
+html[data-remote] .snap-x {
+  scroll-snap-type: none;
+}
+/* Re-blurring the page behind the top bar on every scroll is slow on TV boxes. */
+html[data-remote] [data-nav-top] {
+  backdrop-filter: none;
+  background: var(--background);
+}

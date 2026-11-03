@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CatalogRow } from "@/components/catalog/CatalogRow";
 import { SuggestedAddons } from "@/components/catalog/SuggestedAddons";
@@ -8,6 +8,8 @@ import { typeLabel } from "@/lib/labels";
 import { searchCatalogs } from "@/lib/stremio";
 import { t } from "@/i18n";
 
+const AUTO_SEARCH_MS = 900;
+
 /** Searches every catalog that supports `search`, one row per catalog. */
 export default function Search() {
   const { active, loading } = useAddons();
@@ -16,6 +18,14 @@ export default function Search() {
   const [draft, setDraft] = useState(query);
   const catalogs = searchCatalogs(active);
 
+  // Results come up when typing pauses, without Enter: with a TV remote,
+  // closing the keyboard otherwise left the page with nothing to go to.
+  useEffect(() => {
+    const q = draft.trim();
+    if (q.length < 2 || q === query) return;
+    const timer = window.setTimeout(() => setParams({ q }, { replace: true }), AUTO_SEARCH_MS);
+    return () => window.clearTimeout(timer);
+  }, [draft, query, setParams]);
 
   return (
     <div className="flex flex-col gap-6">

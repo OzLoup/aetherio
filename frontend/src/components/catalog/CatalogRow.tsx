@@ -38,9 +38,8 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
   const extraKey = JSON.stringify(extra ?? {});
   const carouselId = `row-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   // TV remote: the row can take focus while it loads; once the posters are
-  // in, the focus moves to the first one (so holding ↓ never runs into a
-  // row with nothing to focus, and the focus never leaves the screen).
-  const placeholderRef = useRef<HTMLDivElement>(null);
+  // in, the focus moves to the one in the same column (so holding ↓ never
+  // runs into a row with nothing to focus, and the focus stays put).
   const onLoadedRef = useRef(onLoaded);
   useEffect(() => {
     onLoadedRef.current = onLoaded;
@@ -79,13 +78,17 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
     if (visible) load();
   }, [visible, load]);
 
-  // Focus was waiting on the loading row: hand it to the first poster (or
-  // the retry button / the row itself if it failed or came back empty).
-  const waiting = useRef(false);
+  // Focus was waiting on the loading row: hand it to the poster in the same
+  // column (or the retry button if it failed).
+  const waiting = useRef<number | null>(null);
   useEffect(() => {
-    if (!waiting.current || !items && !failed) return;
-    waiting.current = false;
-    const target = rootRef.current?.querySelector<HTMLElement>("[data-blossom-slide] a, button:not([tabindex='-1'])");
+    if (waiting.current === null || (!items && !failed)) return;
+    const column = waiting.current;
+    waiting.current = null;
+    const posters = rootRef.current?.querySelectorAll<HTMLElement>("[data-blossom-slide]:not([data-see-all]) a");
+    const target = posters?.length
+      ? posters[Math.min(column, posters.length - 1)]
+      : rootRef.current?.querySelector<HTMLElement>("[data-blossom-slide] a, button:not([tabindex='-1'])");
     target?.focus({ preventScroll: true });
   }, [items, failed]);
 
@@ -142,7 +145,7 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
               ))
             : null}
           {items && remote && seeAllHref && items.length > 0 && (
-            <div data-blossom-slide className={`${CARD_WIDTH[shape]} shrink-0 snap-start`}>
+            <div data-blossom-slide data-see-all className={`${CARD_WIDTH[shape]} shrink-0 snap-start`}>
               <Link
                 to={seeAllHref}
                 className="flex aspect-[2/3] w-full flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-sm font-medium text-primary"
@@ -155,19 +158,18 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
           {items
             ? null
             : Array.from({ length: 8 }, (_, i) =>
-                i === 0 ? (
+                remote ? (
                   <div
                     key={i}
-                    ref={placeholderRef}
                     tabIndex={0}
                     aria-busy="true"
                     aria-label={t("Cargando {title}", { title })}
                     onFocus={() => {
-                      waiting.current = true;
+                      waiting.current = i;
                       setVisible(true); // load now if it wasn't near yet
                     }}
                     onBlur={() => {
-                      waiting.current = false;
+                      if (waiting.current === i) waiting.current = null;
                     }}
                     className={`${CARD_WIDTH.poster} shrink-0 rounded-lg`}
                   >

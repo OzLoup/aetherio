@@ -9,6 +9,7 @@ import { MyListButton } from "./MyListButton";
 import { typeLabel } from "@/lib/labels";
 import { detailPath, streamsPath } from "@/lib/routes";
 import { getCatalog, type AddonRef, type MetaPreview } from "@/lib/stremio";
+import { remoteMode } from "@/lib/spatialNav";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -26,6 +27,7 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
   const [paused, setPaused] = useState(false);
   const reduce = useReducedMotion();
   const rootRef = useRef<HTMLElement>(null);
+  const remote = remoteMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +75,8 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
       }}
       onKeyDown={(e) => {
         // With a TV remote the arrows move focus (lib/spatialNav.ts); the
-        // side arrows and dots change the slide.
-        if (document.documentElement.dataset.remote !== undefined) return;
+        // ‹ › buttons change the slide.
+        if (remote) return;
         if (e.key === "ArrowLeft") go(active - 1);
         else if (e.key === "ArrowRight") go(active + 1);
       }}
@@ -95,7 +97,12 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
       <div className="absolute inset-0 bg-gradient-to-r from-background via-background/75 to-background/10" />
       <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/30" />
 
-      <div className="relative mx-auto flex min-h-[26rem] max-w-7xl flex-col gap-8 px-4 pb-10 pt-10 lg:min-h-[32rem] lg:flex-row lg:items-center">
+      <div
+        className={cn(
+          "relative mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-10 pt-10 lg:flex-row lg:items-center",
+          remote ? "min-h-[20rem]" : "min-h-[26rem] lg:min-h-[32rem]",
+        )}
+      >
         {/* Info about the active title */}
         <div className="flex min-w-0 flex-1 flex-col gap-4 lg:max-w-xl">
           <span className="text-xs font-semibold uppercase tracking-widest text-primary">Destacado · {typeLabel(meta.type)}</span>
@@ -122,21 +129,48 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
               ))}
             </div>
             {meta.description && <p className="line-clamp-3 max-w-prose text-foreground/85">{meta.description}</p>}
-            <div className="flex flex-wrap gap-2">
-              <Link to={watchHref} className={buttonVariants({ size: "lg" })}>
-                <Play className="fill-current" />
-                {t("Ver ahora")}
-              </Link>
-              <Link to={detailPath(meta.type, meta.id)} className={buttonVariants({ size: "lg", variant: "outline" })}>
-                <Info />
-                {t("Más información")}
-              </Link>
-              <MyListButton meta={meta} />
-            </div>
           </motion.div>
+          {/* Outside the per-title fade: changing the title keeps the focus here. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to={watchHref} className={buttonVariants({ size: "lg" })}>
+              <Play className="fill-current" />
+              {t("Ver ahora")}
+            </Link>
+            <Link to={detailPath(meta.type, meta.id)} className={buttonVariants({ size: "lg", variant: "outline" })}>
+              <Info />
+              {t("Más información")}
+            </Link>
+            <MyListButton meta={meta} />
+            {/* TV remote: previous/next on the same row as the buttons (wraps around,
+                never disabled: a disabled button would drop the focus). */}
+            {remote && (
+              <div className="ml-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActive((active - 1 + items.length) % items.length)}
+                  className="flex size-11 items-center justify-center rounded-lg border border-border"
+                  aria-label={t("Anterior destacado")}
+                >
+                  <ChevronLeft className="size-5" />
+                </button>
+                <span className="min-w-12 text-center text-sm tabular-nums text-muted-foreground">
+                  {active + 1} / {items.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActive((active + 1) % items.length)}
+                  className="flex size-11 items-center justify-center rounded-lg border border-border"
+                  aria-label={t("Siguiente destacado")}
+                >
+                  <ChevronRight className="size-5" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Cover flow */}
+        {/* Cover flow (not on TV: heavy for TV boxes, and the remote has the buttons above) */}
+        {!remote && (
         <div className="flex flex-1 flex-col items-center gap-5">
           <div className="relative hidden h-72 w-full items-center justify-center [transform-style:preserve-3d] sm:flex" style={{ perspective: 1200 }}>
             {items.map((item, i) => {
@@ -211,6 +245,7 @@ export function FeaturedHero({ addon, type, catalogId }: { addon: AddonRef; type
             </button>
           </div>
         </div>
+        )}
       </div>
     </section>
   );

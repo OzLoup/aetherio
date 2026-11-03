@@ -20,6 +20,21 @@ const SUBTITLES_WAIT_MS = 6000;
 // Torrentio's "downloading" placeholder is ~30 s; no movie/episode is this short.
 const PLACEHOLDER_MAX_S = 90;
 
+/** The page's --primary (an oklch color) as #rrggbb, for the native player. */
+function accentHex(): string | undefined {
+  try {
+    const color = getComputedStyle(document.documentElement).getPropertyValue("--primary").trim();
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!color || !ctx) return undefined;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function choiceLabel(lang: AudioChoice) {
   return lang === "original" ? t("Original (sin doblaje marcado)") : streamLangLabel(lang);
 }
@@ -93,6 +108,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       subtitlesOn,
       hasVersions,
       nextEpisode: nextRef.current?.code || undefined,
+      accentColor: accentHex(),
     });
     setStatus("playing");
   }

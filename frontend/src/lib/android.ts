@@ -33,6 +33,8 @@ export interface NativePlayRequest {
   subtitlesOn: boolean;
   /** Show "Idioma y calidad" (other files of this title). */
   hasVersions: boolean;
+  /** The profile's UI color (#rrggbb) for the player's buttons and bar. */
+  accentColor?: string;
   /** "Siguiente episodio" button label (e.g. "T1E3"); absent = no next episode. */
   nextEpisode?: string;
 }

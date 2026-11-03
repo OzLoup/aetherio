@@ -1,6 +1,9 @@
 package com.aetherio.app;
 
 import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -32,6 +35,7 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.common.util.Util;
+import androidx.media3.ui.DefaultTimeBar;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.TimeBar;
 
@@ -136,6 +140,7 @@ public class PlayerActivity extends Activity {
             nextOverlay.setText(label);
             nextOverlay.setOnClickListener(v -> goNext());
         }
+        applyAccent(req.optString("accentColor", ""));
         preferLatino = req.optBoolean("preferLatino");
         boolean subtitlesOn = req.optBoolean("subtitlesOn");
 
@@ -254,6 +259,50 @@ public class PlayerActivity extends Activity {
         if (nextOverlay.getVisibility() == visibility) return;
         nextOverlay.setVisibility(visibility);
         if (show && !view.isControllerFullyVisible()) nextOverlay.requestFocus();
+    }
+
+    /** The profile's color (from the page) on the buttons, the time label
+     * and the progress bar; the XML drawables keep the brand blue. */
+    private void applyAccent(String hex) {
+        int accent;
+        try {
+            accent = Color.parseColor(hex);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        float density = getResources().getDisplayMetrics().density;
+        for (int id : new int[] {R.id.versions, R.id.next_episode, R.id.scrub_time}) {
+            findViewById(id).setBackground(topButton(accent, density));
+        }
+        StateListDrawable overlay = new StateListDrawable();
+        overlay.addState(new int[] {android.R.attr.state_focused}, rounded(0xFFFFFFFF, 8 * density, accent, (int) (3 * density)));
+        overlay.addState(new int[] {}, rounded(0xEEFFFFFF, 8 * density, 0, 0));
+        findViewById(R.id.next_overlay).setBackground(overlay);
+        View bar = view.findViewById(androidx.media3.ui.R.id.exo_progress);
+        if (bar instanceof DefaultTimeBar) {
+            ((DefaultTimeBar) bar).setPlayedColor(accent);
+            ((DefaultTimeBar) bar).setScrubberColor(accent);
+        }
+    }
+
+    private static StateListDrawable topButton(int accent, float density) {
+        StateListDrawable d = new StateListDrawable();
+        d.addState(new int[] {android.R.attr.state_focused}, rounded(withAlpha(accent, 0x99), 20 * density, 0xFFFFFFFF, (int) (2 * density)));
+        d.addState(new int[] {android.R.attr.state_pressed}, rounded(withAlpha(accent, 0xBB), 20 * density, 0, 0));
+        d.addState(new int[] {}, rounded(0x33FFFFFF, 20 * density, 0, 0));
+        return d;
+    }
+
+    private static GradientDrawable rounded(int fill, float radius, int stroke, int strokeWidth) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(fill);
+        g.setCornerRadius(radius);
+        if (strokeWidth > 0) g.setStroke(strokeWidth, stroke);
+        return g;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
     /** While the bar is moved (touch or remote), show the target time big,

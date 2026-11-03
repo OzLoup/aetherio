@@ -1,7 +1,7 @@
 {
   "name": "aetherio-desktop",
   "productName": "AetherIO",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "AetherIO para macOS y Windows: la app web + un servidor de video local con ffmpeg.",
   "type": "module",

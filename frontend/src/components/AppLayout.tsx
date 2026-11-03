@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Compass, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users, Radio } from "lucide-react";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import { BrandLogo } from "./BrandLogo";
 import { FadeUp } from "./motion/FadeUp";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ProfileAvatar } from "./profiles/ProfileAvatar";
+import { focusPageStart } from "@/lib/spatialNav";
 
 const NAV = [
   { to: "/", label: "Inicio", icon: Home },
@@ -56,7 +57,9 @@ function HeaderSearch() {
 
 /** Shell for every page that runs as a profile. */
 export function AppLayout() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  // TV remote: each page starts with something focused.
+  useEffect(() => focusPageStart(), [pathname, search]);
   const { logout } = useAuth();
   const { profiles, current, select, clearSelection } = useProfiles();
   const { theme, toggleTheme } = useTheme();

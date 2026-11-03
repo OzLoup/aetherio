@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const svg = readFileSync(path.join(here, "../../desktop/build/icon.svg"), "utf8").replace('width="1024" height="1024"', 'width="250" height="250"');
 const html = `<html><body style="margin:0;width:640px;height:360px;display:flex;align-items:center;justify-content:center;gap:8px;
-  background:linear-gradient(135deg,#2a1f52,#0b0918);font-family:-apple-system,Helvetica,sans-serif">
-  ${svg}<span style="font-size:84px;font-weight:700;letter-spacing:-2px;color:#fff">Aether<span style="color:#b39aff">IO</span></span></body></html>`;
+  background:linear-gradient(135deg,#0f2a4a,#070d18);font-family:-apple-system,Helvetica,sans-serif">
+  ${svg}<span style="font-size:84px;font-weight:700;letter-spacing:-2px;color:#fff">Aether<span style="color:#7fb6ee">IO</span></span></body></html>`;
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 640, height: 360, show: false, frame: false, webPreferences: { offscreen: true } });

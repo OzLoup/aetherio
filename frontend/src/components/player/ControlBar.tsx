@@ -2,6 +2,7 @@ import { Pause, Play, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from "luc
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { Playback } from "@/hooks/usePlayback";
 import { formatTime } from "@/lib/format";
+import { remoteMode } from "@/lib/spatialNav";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -171,8 +172,10 @@ export function ControlBar({ playback, visible, onTogglePlay, onSeek, onSkip, on
         <BarButton label={t("Adelantar 10 segundos")} onClick={() => onSkip(10)}>
           <RotateCw />
         </BarButton>
-        {/* Phones use their volume buttons (iOS ignores page volume). */}
-        <div className="group/vol hidden items-center sm:flex">
+        {/* Phones use their volume buttons (iOS ignores page volume), and
+            with a TV remote the TV sets the volume (the video stays at
+            100%): no volume control there. */}
+        <div className={cn("group/vol hidden items-center", !remoteMode() && "sm:flex")}>
           <BarButton label={muted ? t("Activar sonido") : t("Silenciar")} onClick={onToggleMute}>
             <VolumeIcon />
           </BarButton>

@@ -108,6 +108,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }
 
   const current = profiles.find((p) => p.id === currentId) ?? null;
+  // The app takes the profile's color (index.css, html[data-accent]);
+  // without a profile it's the brand blue.
+  const accent = current?.color;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (accent) root.dataset.accent = accent;
+    else delete root.dataset.accent;
+  }, [accent]);
 
   return (
     <ProfileContext.Provider

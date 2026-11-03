@@ -178,6 +178,8 @@ def catalog_defs(type_: str, genre_names: list[str]) -> list[dict]:
         {"type": type_, "id": "aetherio.new", "name": "Estrenos", "extra": [{"name": "genre", "options": genre_names}, {"name": "skip"}]},
     ]
     defs += [{"type": type_, "id": f"aetherio.{key}", "name": name, "extra": browse_extra} for key, name, _ in PROVIDERS]
+    # Search box only (a required extra keeps it off Home/Discover rows).
+    defs.append({"type": type_, "id": "aetherio.search", "name": "Búsqueda", "extra": [{"name": "search", "isRequired": True}]})
     return defs
 
 
@@ -223,7 +225,12 @@ async def catalog(country: str, type_: str, catalog_id: str, extra: dict[str, st
             return []
         params["with_genres"] = genre_id
 
-    if key == "trending":
+    if key == "search":
+        query = (extra.get("search") or "").strip()
+        if not query:
+            return []
+        data = await _get(f"/search/{kind}", query=query, language=language, page=1, include_adult="false")
+    elif key == "trending":
         data = await _get(f"/trending/{kind}/week", language=language, page=page)
     elif key == "new":
         today = date.today().isoformat()
@@ -289,3 +296,80 @@ async def similar(type_: str, imdb_id: str, language: str) -> list[dict]:
     items = items[:SIMILAR_MAX]
     ids = await imdb_ids(kind, [i["id"] for i in items])
     return [to_meta(i, type_, ids[i["id"]]) for i in items if i["id"] in ids]
+
+
+# --- full details (meta resource): the app works without Cinemeta ------------
+
+
+def _year_range(first: str, last: str, ongoing: bool) -> str:
+    start = first[:4] if first[:4].isdigit() else ""
+    if not start:
+        return ""
+    if ongoing:
+        return f"{start}–"
+    end = last[:4] if last[:4].isdigit() else ""
+    return start if not end or end == start else f"{start}–{end}"
+
+
+async def meta(type_: str, imdb_id: str, language: str) -> dict | None:
+    """Stremio meta for an IMDb id: overview, cast, director, trailer and, for
+    series, every episode (ids "tt…:season:episode", what streams addons use)."""
+    kind = KINDS.get(type_)
+    if not kind or not imdb_id.startswith("tt"):
+        return None
+    found = await _get(f"/find/{imdb_id}", external_source="imdb_id", language=language)
+    matches = found.get(f"{kind}_results") or []
+    if not matches:
+        return None
+    tmdb_id = matches[0]["id"]
+    d = await _get(f"/{kind}/{tmdb_id}", language=language, append_to_response="credits,videos",
+                   include_video_language=f"{language.split('-')[0]},en")
+    out = to_meta(d, type_, imdb_id)
+    out["genres"] = [g["name"] for g in d.get("genres", [])]
+    cast = [c["name"] for c in (d.get("credits") or {}).get("cast", [])[:8]]
+    if cast:
+        out["cast"] = cast
+    crew = (d.get("credits") or {}).get("crew", [])
+    directors = [c["name"] for c in crew if c.get("job") == "Director"] or [c["name"] for c in d.get("created_by", [])]
+    if directors:
+        out["director"] = directors[:3]
+    trailers = [v for v in (d.get("videos") or {}).get("results", []) if v.get("site") == "YouTube" and v.get("type") == "Trailer"]
+    if trailers:
+        out["trailerStreams"] = [{"title": trailers[0].get("name"), "ytId": trailers[0]["key"]}]
+    runtime = d.get("runtime") or (d.get("episode_run_time") or [None])[0]
+    if runtime:
+        out["runtime"] = f"{runtime} min"
+    if d.get("tagline") and not out.get("description"):
+        out["description"] = d["tagline"]
+
+    if kind == "movie":
+        out["released"] = d.get("release_date") or None
+        out["behaviorHints"] = {"defaultVideoId": imdb_id}
+        return out
+
+    out["releaseInfo"] = _year_range(d.get("first_air_date") or "", d.get("last_air_date") or "", d.get("in_production", False))
+    seasons = [x["season_number"] for x in d.get("seasons", []) if x.get("season_number") is not None]
+
+    async def season(n: int) -> list[dict]:
+        try:
+            data = await _get(f"/tv/{tmdb_id}/season/{n}", language=language)
+        except TmdbError:
+            return []
+        videos = []
+        for e in data.get("episodes", []):
+            num = e.get("episode_number")
+            if num is None:
+                continue
+            v = {"id": f"{imdb_id}:{n}:{num}", "season": n, "episode": num, "number": num,
+                 "title": e.get("name") or f"Episodio {num}"}
+            if e.get("air_date"):
+                v["released"] = f"{e['air_date']}T00:00:00.000Z"
+            if e.get("overview"):
+                v["overview"] = e["overview"]
+            if e.get("still_path"):
+                v["thumbnail"] = f"{IMAGES}/w300{e['still_path']}"
+            videos.append(v)
+        return videos
+
+    out["videos"] = [v for chunk in await asyncio.gather(*(season(n) for n in seasons)) for v in chunk]
+    return out

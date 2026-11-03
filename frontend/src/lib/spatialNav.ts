@@ -25,12 +25,14 @@ const KEYS: Record<string, Direction> = {
   ArrowRight: "right",
 };
 
+// tabindex=-1 = deliberately out of the tab order (carousel arrows…):
+// never a remote target either.
 const FOCUSABLE = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled]):not([type=hidden])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
+  "a[href]:not([tabindex='-1'])",
+  "button:not([disabled]):not([tabindex='-1'])",
+  "input:not([disabled]):not([type=hidden]):not([tabindex='-1'])",
+  "select:not([disabled]):not([tabindex='-1'])",
+  "textarea:not([disabled]):not([tabindex='-1'])",
   "[tabindex]:not([tabindex='-1'])",
   "[role=menuitem]",
 ].join(",");
@@ -57,12 +59,63 @@ function scope(): ParentNode {
   return layers.length ? layers[layers.length - 1] : document;
 }
 
+/** Everything focusable in scope with its box (one layout pass). The
+ * visibility check (the slow part) is left for the few best candidates. */
+function boxes(root: ParentNode) {
+  const out: { el: HTMLElement; r: DOMRect }[] = [];
+  for (const el of root.querySelectorAll<HTMLElement>(FOCUSABLE)) {
+    const r = el.getBoundingClientRect();
+    if (r.width >= 2 && r.height >= 2) out.push({ el, r });
+  }
+  return out;
+}
+
 function candidates(root: ParentNode) {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isVisible);
+  return boxes(root)
+    .filter(({ el }) => isVisible(el))
+    .map(({ el }) => el);
 }
 
 /** Closest candidate in a direction: distance along it, heavily penalizing
  * being off to the side (so "down" stays in the same column). */
+function score(from: DOMRect, r: DOMRect, dir: Direction): number | null {
+  const cx = from.left + from.width / 2;
+  const cy = from.top + from.height / 2;
+  const ex = r.left + r.width / 2;
+  const ey = r.top + r.height / 2;
+  let along: number;
+  let gap: number;
+  let offset: number;
+  if (dir === "left" || dir === "right") {
+    along = dir === "right" ? r.left - from.right : from.left - r.right;
+    if ((dir === "right" ? ex - cx : cx - ex) <= 1) return null;
+    gap = Math.max(0, Math.max(r.top, from.top) - Math.min(r.bottom, from.bottom));
+    // Left/right never jump to another row (end of a row = stay put).
+    if (gap > 0) return null;
+    offset = Math.abs(ey - cy);
+  } else {
+    along = dir === "down" ? r.top - from.bottom : from.top - r.bottom;
+    if ((dir === "down" ? ey - cy : cy - ey) <= 1) return null;
+    gap = Math.max(0, Math.max(r.left, from.left) - Math.min(r.right, from.right));
+    offset = Math.abs(ex - cx);
+  }
+  return Math.max(0, along) + gap * 4 + offset * 0.1;
+}
+
+/** Closest visible element in a direction: score every box (cheap), then
+ * check visibility in score order and stop at the first visible one. */
+function bestIn(from: DOMRect, all: { el: HTMLElement; r: DOMRect }[], dir: Direction, current: HTMLElement | null) {
+  const scored: { el: HTMLElement; s: number }[] = [];
+  for (const { el, r } of all) {
+    if (el === current || (current && (el.contains(current) || current.contains(el)))) continue;
+    const s = score(from, r, dir);
+    if (s !== null) scored.push({ el, s });
+  }
+  scored.sort((a, b) => a.s - b.s);
+  for (const { el } of scored) if (isVisible(el)) return el;
+  return null;
+}
+
 function best(from: DOMRect, list: HTMLElement[], dir: Direction, current: HTMLElement | null) {
   let winner: HTMLElement | null = null;
   let winnerScore = Infinity;
@@ -108,6 +161,32 @@ function focusEl(el: HTMLElement, instant = false) {
 // keeps it fast but readable.
 const REPEAT_MS = 90;
 let lastMove = 0;
+
+// Where the focus last was (to resume if that element disappears).
+let lastRect: DOMRect | null = null;
+let lastPath = "";
+
+function rememberFocus(e: FocusEvent) {
+  const el = e.target;
+  if (!(el instanceof HTMLElement) || el === document.body) return;
+  lastRect = el.getBoundingClientRect();
+  lastPath = location.pathname;
+}
+
+function nearest(from: DOMRect, all: { el: HTMLElement; r: DOMRect }[]) {
+  const cx = from.left + from.width / 2;
+  const cy = from.top + from.height / 2;
+  let winner: HTMLElement | null = null;
+  let d = Infinity;
+  for (const { el, r } of all) {
+    const dist = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
+    if (dist < d && isVisible(el)) {
+      d = dist;
+      winner = el;
+    }
+  }
+  return winner;
+}
 
 /** First thing to focus on a page: top-most, left-most visible item (main content first). */
 function firstItem(list: HTMLElement[]) {
@@ -202,8 +281,23 @@ function isClosedPopupTrigger(el: Element | null) {
 }
 
 /** Capture phase, before the page's own handlers see the key. */
+/** An open suggestions list (search box): Back/Escape closes it first. */
+function closeOpenCombobox(): boolean {
+  const combo = document.querySelector<HTMLElement>("[role=combobox][aria-expanded=true]");
+  if (!combo) return false;
+  combo.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+  return true;
+}
+
 function onKeyDownCapture(e: KeyboardEvent) {
   const active = document.activeElement;
+  // Back/Escape with suggestions open: close them (the box handles it).
+  if (e.key === "Escape" && e.isTrusted && document.querySelector("[role=combobox][aria-expanded=true]")) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeOpenCombobox();
+    return;
+  }
   // OK on a field that's only focused: start typing (and don't submit).
   if ((e.key === "Enter" || e.key === "NumpadEnter") && isTextField(active) && active.dataset[LOCK] !== undefined) {
     e.preventDefault();
@@ -237,26 +331,49 @@ function onKeyDown(e: KeyboardEvent) {
   lastMove = performance.now();
 
   const root = scope();
-  const list = candidates(root);
-  const current = active && active !== document.body && list.includes(active) ? active : null;
+  const all = boxes(root);
+  const current = active && active !== document.body && root.contains(active) && all.some((b) => b.el === active) ? active : null;
 
   if (!current) {
-    const first = firstItem(list);
-    if (first) focusEl(first);
+    // The focused thing went away (the page re-rendered, a row loaded):
+    // carry on from where it was instead of jumping back to the top.
+    const from = lastRect && lastPath === location.pathname ? lastRect : null;
+    const resume = from ? bestIn(from, all, dir, null) ?? nearest(from, all) : null;
+    const first = resume ?? firstItem(all.filter(({ el }) => isVisible(el)).map(({ el }) => el));
+    if (first) focusEl(first, e.repeat);
     return;
   }
-  const next = best(current.getBoundingClientRect(), list, dir, current);
+  const currentRect = current.getBoundingClientRect();
+  const next = bestIn(currentRect, all, dir, current);
   if (next) {
     focusEl(next, e.repeat);
   } else if (root === document && (dir === "up" || dir === "down")) {
-    // Rows further down may still be loading: scroll to bring them in.
-    window.scrollBy({ top: (dir === "down" ? 1 : -1) * window.innerHeight * 0.6, behavior: e.repeat ? "auto" : "smooth" });
+    // Rows further down may still be loading: bring them in, but never so
+    // far that the focused item leaves the screen.
+    const room = dir === "down" ? currentRect.top - 80 : window.innerHeight - currentRect.bottom - 80;
+    const amount = Math.min(window.innerHeight * 0.6, Math.max(0, room));
+    if (amount > 0) window.scrollBy({ top: (dir === "down" ? 1 : -1) * amount, behavior: e.repeat ? "auto" : "smooth" });
   }
 }
 
 /** Back button on the remote: stop typing, then close the open
  * menu/dialog, before leaving the page. */
+// Screens that answer Back themselves while shown (newest first), e.g.
+// the Android player's "Idioma y calidad" list → back to the video.
+const backHandlers: (() => boolean)[] = [];
+
+/** Take the remote's Back while mounted; return the function to release it. */
+export function onRemoteBack(handler: () => boolean) {
+  backHandlers.unshift(handler);
+  return () => {
+    const i = backHandlers.indexOf(handler);
+    if (i >= 0) backHandlers.splice(i, 1);
+  };
+}
+
 function closeLayer(): boolean {
+  if (closeOpenCombobox()) return true;
+  for (const handler of backHandlers) if (handler()) return true;
   const active = document.activeElement;
   if (isTextField(active) && isEditing(active) && active.dataset.remoteEditing !== undefined) {
     delete active.dataset.remoteEditing;
@@ -298,6 +415,7 @@ export function installSpatialNavigation() {
   window.addEventListener("keydown", onKeyDownCapture, true);
   window.addEventListener("keydown", onKeyDown);
   document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("focusin", rememberFocus);
   document.addEventListener("focusout", onFocusOut);
   window.__aetherBack = closeLayer;
   return () => {
@@ -305,6 +423,7 @@ export function installSpatialNavigation() {
     window.removeEventListener("keydown", onKeyDownCapture, true);
     window.removeEventListener("keydown", onKeyDown);
     document.removeEventListener("focusin", onFocusIn);
+  document.removeEventListener("focusin", rememberFocus);
     document.removeEventListener("focusout", onFocusOut);
     delete window.__aetherBack;
   };

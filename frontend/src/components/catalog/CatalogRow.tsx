@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { getCatalog, type AddonRef, type Extra, type MetaPreview } from "@/lib/stremio";
 import { CARD_WIDTH, PosterCard, PosterSkeleton } from "./PosterCard";
+import { remoteMode } from "@/lib/spatialNav";
 import { t } from "@/i18n";
 
 const ROW_LIMIT = 24;
@@ -30,11 +31,16 @@ interface CatalogRowProps {
  * with many catalogs doesn't fire every request at once. */
 export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, seeAllHref, hideWhenEmpty, onLoaded }: CatalogRowProps) {
   const rootRef = useRef<HTMLElement>(null);
+  const remote = remoteMode();
   const [visible, setVisible] = useState(false);
   const [items, setItems] = useState<MetaPreview[] | null>(null);
   const [failed, setFailed] = useState(false);
   const extraKey = JSON.stringify(extra ?? {});
   const carouselId = `row-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  // TV remote: the row can take focus while it loads; once the posters are
+  // in, the focus moves to the first one (so holding ↓ never runs into a
+  // row with nothing to focus, and the focus never leaves the screen).
+  const placeholderRef = useRef<HTMLDivElement>(null);
   const onLoadedRef = useRef(onLoaded);
   useEffect(() => {
     onLoadedRef.current = onLoaded;
@@ -73,6 +79,16 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
     if (visible) load();
   }, [visible, load]);
 
+  // Focus was waiting on the loading row: hand it to the first poster (or
+  // the retry button / the row itself if it failed or came back empty).
+  const waiting = useRef(false);
+  useEffect(() => {
+    if (!waiting.current || !items && !failed) return;
+    waiting.current = false;
+    const target = rootRef.current?.querySelector<HTMLElement>("[data-blossom-slide] a, button:not([tabindex='-1'])");
+    target?.focus({ preventScroll: true });
+  }, [items, failed]);
+
   if (hideWhenEmpty && items && items.length === 0) return null;
   const shape = items?.[0]?.posterShape ?? "poster";
 
@@ -85,7 +101,11 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {seeAllHref && items && items.length > 0 && (
-            <Link to={seeAllHref} className="rounded-md px-2 py-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link
+              to={seeAllHref}
+              tabIndex={remote ? -1 : undefined}
+              className="rounded-md px-2 py-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {t("Ver todo")}
             </Link>
           )}
@@ -120,7 +140,43 @@ export function CatalogRow({ title, subtitle, addon, type, catalogId, extra, see
                   <PosterCard meta={m} />
                 </div>
               ))
-            : Array.from({ length: 8 }, (_, i) => <PosterSkeleton key={i} className={`${CARD_WIDTH.poster} shrink-0`} />)}
+            : null}
+          {items && remote && seeAllHref && items.length > 0 && (
+            <div data-blossom-slide className={`${CARD_WIDTH[shape]} shrink-0 snap-start`}>
+              <Link
+                to={seeAllHref}
+                className="flex aspect-[2/3] w-full flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-sm font-medium text-primary"
+              >
+                <ChevronRight className="size-6" />
+                {t("Ver todo")}
+              </Link>
+            </div>
+          )}
+          {items
+            ? null
+            : Array.from({ length: 8 }, (_, i) =>
+                i === 0 ? (
+                  <div
+                    key={i}
+                    ref={placeholderRef}
+                    tabIndex={0}
+                    aria-busy="true"
+                    aria-label={t("Cargando {title}", { title })}
+                    onFocus={() => {
+                      waiting.current = true;
+                      setVisible(true); // load now if it wasn't near yet
+                    }}
+                    onBlur={() => {
+                      waiting.current = false;
+                    }}
+                    className={`${CARD_WIDTH.poster} shrink-0 rounded-lg`}
+                  >
+                    <PosterSkeleton className="w-full" />
+                  </div>
+                ) : (
+                  <PosterSkeleton key={i} className={`${CARD_WIDTH.poster} shrink-0`} />
+                ),
+              )}
         </BlossomCarousel>
       )}
     </section>

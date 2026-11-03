@@ -10,17 +10,21 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Hue of the whole UI (buttons, focus, links, the faint tint of the
+     greys): the brand violet, or the current profile's color
+     (html[data-accent], set by ProfileContext). */
+  --accent-h: 292;
   --background: oklch(0.99 0 0);
-  --foreground: oklch(0.18 0.01 285);
+  --foreground: oklch(0.18 0.01 var(--accent-h));
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.01 285);
-  --muted: oklch(0.96 0.005 285);
-  --muted-foreground: oklch(0.48 0.01 285);
-  --border: oklch(0.9 0.005 285);
-  --input: oklch(0.9 0.005 285);
-  --ring: oklch(0.62 0.19 292);
+  --card-foreground: oklch(0.18 0.01 var(--accent-h));
+  --muted: oklch(0.96 0.005 var(--accent-h));
+  --muted-foreground: oklch(0.48 0.01 var(--accent-h));
+  --border: oklch(0.9 0.005 var(--accent-h));
+  --input: oklch(0.9 0.005 var(--accent-h));
+  --ring: oklch(0.62 0.19 var(--accent-h));
 
-  --primary: oklch(0.58 0.2 292);
+  --primary: oklch(0.58 0.2 var(--accent-h));
   --primary-foreground: oklch(0.98 0 0);
 
   --success: oklch(0.65 0.16 152);
@@ -31,7 +35,7 @@
   --destructive-foreground: oklch(0.98 0 0);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.01 285);
+  --popover-foreground: oklch(0.18 0.01 var(--accent-h));
 
   /* Categorical chart series — validated palette, fixed hue order (never
      reassigned per-chart). Used only for chart identity, never for status. */
@@ -48,18 +52,18 @@
 }
 
 .dark {
-  --background: oklch(0.16 0.01 275);
-  --foreground: oklch(0.94 0.005 280);
-  --card: oklch(0.2 0.012 275);
-  --card-foreground: oklch(0.94 0.005 280);
-  --muted: oklch(0.24 0.012 275);
-  --muted-foreground: oklch(0.66 0.012 280);
-  --border: oklch(0.29 0.014 275);
-  --input: oklch(0.29 0.014 275);
-  --ring: oklch(0.68 0.19 292);
+  --background: oklch(0.16 0.01 var(--accent-h));
+  --foreground: oklch(0.94 0.005 var(--accent-h));
+  --card: oklch(0.2 0.012 var(--accent-h));
+  --card-foreground: oklch(0.94 0.005 var(--accent-h));
+  --muted: oklch(0.24 0.012 var(--accent-h));
+  --muted-foreground: oklch(0.66 0.012 var(--accent-h));
+  --border: oklch(0.29 0.014 var(--accent-h));
+  --input: oklch(0.29 0.014 var(--accent-h));
+  --ring: oklch(0.68 0.19 var(--accent-h));
 
-  --primary: oklch(0.68 0.19 292);
-  --primary-foreground: oklch(0.16 0.01 275);
+  --primary: oklch(0.68 0.19 var(--accent-h));
+  --primary-foreground: oklch(0.16 0.01 var(--accent-h));
 
   --success: oklch(0.72 0.17 152);
   --success-foreground: oklch(0.14 0.02 152);
@@ -68,8 +72,8 @@
   --destructive: oklch(0.68 0.2 25);
   --destructive-foreground: oklch(0.14 0.01 25);
 
-  --popover: oklch(0.2 0.012 275);
-  --popover-foreground: oklch(0.94 0.005 280);
+  --popover: oklch(0.2 0.012 var(--accent-h));
+  --popover-foreground: oklch(0.94 0.005 var(--accent-h));
 
   /* Same 8 hues, stepped for the dark surface — not a separate palette. */
   --series-1: #3987e5;
@@ -81,6 +85,16 @@
   --series-7: #9085e9;
   --series-8: #e66767;
 }
+
+/* Profile color → UI hue (same order as the avatar colors). */
+html[data-accent="series-1"] { --accent-h: 255; } /* blue */
+html[data-accent="series-2"] { --accent-h: 45; }  /* orange */
+html[data-accent="series-3"] { --accent-h: 185; } /* aqua */
+html[data-accent="series-4"] { --accent-h: 85; }  /* yellow */
+html[data-accent="series-5"] { --accent-h: 350; } /* magenta */
+html[data-accent="series-6"] { --accent-h: 145; } /* green */
+html[data-accent="series-7"] { --accent-h: 292; } /* violet */
+html[data-accent="series-8"] { --accent-h: 25; }  /* red */
 
 @theme inline {
   --color-background: var(--background);

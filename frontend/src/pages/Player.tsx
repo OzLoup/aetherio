@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CastDevicePicker, CastHelp, CastingOverlay } from "@/components/player/CastPanels";
 import { BarButton, ControlBar } from "@/components/player/ControlBar";
+import { DebridProgress } from "@/components/player/DebridProgress";
 import { Button } from "@/components/ui/button";
 import { useProfiles } from "@/context/ProfileContext";
 import { useAddons } from "@/hooks/useAddons";
@@ -1355,6 +1356,8 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
             <p className="text-sm text-white/70">
               {t("No estaba en su caché, así que ya pidió descargarlo. Puede tardar desde unos minutos hasta horas si tiene pocas fuentes. Puedes volver más tarde, o elegir ahora un stream marcado como ⚡ Listo, que empieza al instante.")}
             </p>
+            {/* Real progress when the source allows it; plays by itself when done. */}
+            <DebridProgress url={url} onReady={retry} />
             <div className="flex flex-wrap justify-center gap-2">
               <Button onClick={() => navigate(-1)}>{t("Elegir uno listo")}</Button>
               <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={retry}>

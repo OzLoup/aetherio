@@ -5,7 +5,7 @@ import { CatalogRow } from "@/components/catalog/CatalogRow";
 import { SuggestedAddons } from "@/components/catalog/SuggestedAddons";
 import { Input } from "@/components/ui/input";
 import { useAddons } from "@/hooks/useAddons";
-import { catalogTitle } from "@/lib/labels";
+import { typeLabel } from "@/lib/labels";
 import { searchCatalogs } from "@/lib/stremio";
 import { t } from "@/i18n";
 
@@ -68,7 +68,9 @@ function SearchResults({ query, catalogs }: { query: string; catalogs: ReturnTyp
       {catalogs.map(({ addon, catalog }, i) => (
         <CatalogRow
           key={keys[i]}
-          title={catalogTitle(catalog.name, catalog.id, catalog.type)}
+          // In results the catalog's own name ("Popular") is noise: the type
+          // is enough, with the addon name below.
+          title={typeLabel(catalog.type)}
           subtitle={addon.manifest.name}
           addon={addon}
           type={catalog.type}

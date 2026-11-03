@@ -85,7 +85,7 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onShowCatalogs, on
             <span className="shrink-0 text-xs text-muted-foreground">v{manifest.version}</span>
           </div>
           {manifest.description && (
-            <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{manifest.description}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">{manifest.description}</p>
           )}
         </div>
         <Switch
@@ -100,9 +100,9 @@ export function AddonCard({ addon, isFirst, isLast, onToggle, onShowCatalogs, on
       {(manifest.catalogs?.length ?? 0) > 0 && addon.enabled && (
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>
-            {t("Mostrar sus catálogos")}
+            {t("Mostrar en Inicio y Descubrir")}
             <span className="block text-xs text-muted-foreground">
-              {addon.show_catalogs ? t("Sus filas y su búsqueda aparecen en la app.") : t("Oculto: solo aporta fichas y lo demás que ofrezca.")}
+              {addon.show_catalogs ? t("Sus catálogos aparecen como filas en Inicio y en Descubrir.") : t("Oculto en Inicio y Descubrir; sigue apareciendo en las búsquedas.")}
             </span>
           </span>
           <Switch checked={addon.show_catalogs} onCheckedChange={(v) => safely(() => onShowCatalogs(v))} />

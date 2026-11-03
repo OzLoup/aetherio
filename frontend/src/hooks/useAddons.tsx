@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getErrorDetail } from "@/api/client";
 import type { AddonPreview, InstalledAddon } from "@/api/types";
-import { fetchManifest, normalizeManifestUrl, type AddonRef, type Manifest } from "@/lib/stremio";
+import { catalogExtraNames, fetchManifest, normalizeManifestUrl, type AddonRef, type Manifest } from "@/lib/stremio";
 import { t } from "@/i18n";
 
 /** Try to get the manifest from the browser. Undefined means "let the
@@ -15,6 +15,23 @@ async function manifestFromBrowser(url: string): Promise<Manifest | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** Keep only the catalogs that can search, with the search made required:
+ * rows (Home) and Discover skip catalogs with a required extra, search
+ * still uses them. */
+function searchOnly(manifest: Manifest): Manifest {
+  const catalogs = (manifest.catalogs ?? [])
+    .filter((c) => catalogExtraNames(c).includes("search"))
+    .map((c) => ({
+      ...c,
+      extra: [
+        ...(c.extra ?? []).filter((e) => e.name !== "search"),
+        { ...((c.extra ?? []).find((e) => e.name === "search") ?? { name: "search" }), isRequired: true },
+      ],
+      extraRequired: [...new Set([...(c.extraRequired ?? []), "search"])],
+    }));
+  return { ...manifest, catalogs };
 }
 
 function useAddonsState() {
@@ -110,8 +127,8 @@ function useAddonsState() {
         .map((a) => ({
           id: a.id,
           transportUrl: a.transport_url,
-          // "Mostrar sus catálogos" off: no rows, Discover or search from it.
-          manifest: a.show_catalogs === false ? { ...a.manifest, catalogs: [] } : a.manifest,
+          // "Mostrar en Inicio y Descubrir" off: its catalogs only answer searches.
+          manifest: a.show_catalogs === false ? searchOnly(a.manifest) : a.manifest,
         })),
     [addons],
   );

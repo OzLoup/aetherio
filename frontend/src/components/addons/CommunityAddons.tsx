@@ -114,7 +114,7 @@ export function CommunityAddons({ onInstall }: { onInstall: (url: string) => voi
       ) : (
         <>
           <p className="text-xs text-muted-foreground">{t("{n} addons", { n: results.length })}</p>
-          <ul className="grid gap-3 md:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {results.slice(0, shown).map(({ transportUrl, manifest }) => {
               const needsSetup = Boolean(manifest.behaviorHints?.configurationRequired);
               const canConfigure = needsSetup || Boolean(manifest.behaviorHints?.configurable);
@@ -124,7 +124,7 @@ export function CommunityAddons({ onInstall }: { onInstall: (url: string) => voi
                     <AddonLogo src={manifest.logo} name={manifest.name} className="size-10 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{manifest.name}</p>
-                      {manifest.description && <p className="line-clamp-2 text-sm text-muted-foreground">{manifest.description}</p>}
+                      {manifest.description && <p className="line-clamp-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">{manifest.description}</p>}
                     </div>
                   </div>
                   <AddonBadges manifest={manifest} />

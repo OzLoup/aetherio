@@ -59,7 +59,7 @@ async def manifest(country: str):
     return JSONResponse(
         {
             "id": f"app.aetherio.tmdb.{country.lower()}",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "name": f"Catálogos AetherIO ({name})",
             "description": (
                 f"Qué hay en Netflix, Prime Video, Disney+, Max, Apple TV+ y Paramount+ en {name}, "
@@ -68,7 +68,9 @@ async def manifest(country: str):
             "types": ["movie", "series"],
             "resources": ["catalog", {"name": "meta", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
             "idPrefixes": ["tt"],
-            "catalogs": tmdb.catalog_defs("movie", movie_genres) + tmdb.catalog_defs("series", tv_genres),
+            # Interleaved by topic (Tendencias: movies, series; Estrenos: …),
+            # so Home reads by topic instead of all movies, then all series.
+            "catalogs": [c for pair in zip(tmdb.catalog_defs("movie", movie_genres), tmdb.catalog_defs("series", tv_genres)) for c in pair],
             "behaviorHints": {"configurable": False},
         },
         headers=HEADERS,

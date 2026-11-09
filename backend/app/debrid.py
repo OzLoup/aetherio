@@ -73,3 +73,195 @@ async def progress(source: Source, transport: httpx.AsyncBaseTransport | None = 
         "seeders": detail.get("seeders"),
         "filename": detail.get("filename") or match.get("filename"),
     }
+
+
+# --- Downloads AetherIO asks for itself (key saved in Ajustes) -------------
+#
+# Instead of hoping the addon adds the torrent when the player opens its
+# link, the app adds it to the user's Real-Debrid, picks the right file and
+# follows it by id. Works for any addon whose stream carries the infohash.
+
+VIDEO_EXT = (".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".webm", ".wmv", ".mpg", ".mpeg")
+HASH_RE = re.compile(r"^[a-f0-9]{40}$")
+FAILED_STATUSES = {"magnet_error", "error", "virus", "dead"}
+# How many of the user's torrents we look through to find one by hash.
+SCAN_PAGES = 5
+PAGE_SIZE = 100
+
+# Real-Debrid error codes worth saying in words (others: their own message).
+RD_ERRORS = {
+    8: "La clave de Real-Debrid no es válida",
+    9: "Real-Debrid no permite esta acción con tu cuenta",
+    20: "Tu cuenta de Real-Debrid no es premium",
+    21: "Tienes demasiadas descargas activas en Real-Debrid. Espera a que termine alguna o cancélala.",
+    23: "Tu cuenta de Real-Debrid llegó a su límite de tráfico",
+    29: "Real-Debrid rechazó el archivo (demasiado grande)",
+    30: "Real-Debrid no pudo leer este torrent",
+    34: "Demasiadas peticiones a Real-Debrid. Espera un momento.",
+    35: "Real-Debrid bloqueó este archivo",
+}
+
+
+def video_files(files: list[dict]) -> list[dict]:
+    vids = [f for f in files if str(f.get("path", "")).lower().endswith(VIDEO_EXT)]
+    return vids or list(files)
+
+
+def _basename(path: str) -> str:
+    return path.rsplit("/", 1)[-1].strip().lower()
+
+
+def pick_file(
+    files: list[dict],
+    filename: str | None = None,
+    file_idx: int | None = None,
+    season: int | None = None,
+    episode: int | None = None,
+) -> dict | None:
+    """The file of the torrent the user chose: by name, then episode code,
+    then the addon's file index, then the biggest video."""
+    if not files:
+        return None
+    ordered = sorted(files, key=lambda f: int(f.get("id", 0)))
+    vids = video_files(ordered)
+    if filename:
+        want = _basename(filename)
+        for f in ordered:
+            if _basename(str(f.get("path", ""))) == want:
+                return f
+    if season is not None and episode is not None:
+        code = re.compile(rf"(?:s0*{season}\s*[._ -]?e0*{episode}(?!\d)|(?<!\d)0*{season}x0*{episode}(?!\d))", re.I)
+        hits = [f for f in vids if code.search(_basename(str(f.get("path", ""))))]
+        if hits:
+            return max(hits, key=lambda f: int(f.get("bytes", 0)))
+    if file_idx is not None and 0 <= file_idx < len(ordered) and ordered[file_idx] in vids:
+        return ordered[file_idx]
+    return max(vids, key=lambda f: int(f.get("bytes", 0)))
+
+
+def link_for(info: dict, file_id: int | None) -> str | None:
+    """Real-Debrid gives one link per selected file, in file order."""
+    links = info.get("links") or []
+    if not links:
+        return None
+    selected = sorted((int(f["id"]) for f in info.get("files") or [] if f.get("selected")))
+    if file_id is not None and file_id in selected:
+        i = selected.index(file_id)
+        if i < len(links):
+            return links[i]
+    return links[0] if len(links) == 1 else None
+
+
+def summary(t: dict) -> dict:
+    """What the app shows of one torrent."""
+    status = t.get("status") or "unknown"
+    return {
+        "status": status,
+        "progress": float(t.get("progress") or 0),
+        "speed": int(t.get("speed") or 0),
+        "seeders": t.get("seeders"),
+        "filename": t.get("filename"),
+        "bytes": int(t.get("bytes") or 0),
+        "ready": status == "downloaded",
+        "failed": status in FAILED_STATUSES,
+    }
+
+
+class RealDebrid:
+    """A small Real-Debrid client for one user's key (used per request)."""
+
+    def __init__(self, key: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
+        self._client = httpx.AsyncClient(
+            base_url=RD_API, timeout=15, headers={"Authorization": f"Bearer {key}"}, transport=transport
+        )
+
+    async def __aenter__(self) -> "RealDebrid":
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        await self._client.aclose()
+
+    async def _call(self, method: str, path: str, **kw) -> httpx.Response:
+        try:
+            res = await self._client.request(method, path, **kw)
+        except httpx.HTTPError as exc:
+            raise DebridError("Real-Debrid no responde") from exc
+        if res.status_code == 401:
+            raise DebridError("La clave de Real-Debrid no es válida")
+        if res.status_code >= 400:
+            code, message = None, None
+            try:
+                body = res.json()
+                code, message = body.get("error_code"), body.get("error")
+            except ValueError:
+                pass
+            raise DebridError(RD_ERRORS.get(code) or f"Real-Debrid respondió {res.status_code}" + (f" ({message})" if message else ""))
+        return res
+
+    async def user(self) -> dict:
+        return (await self._call("GET", "/user")).json()
+
+    async def torrents(self, pages: int = SCAN_PAGES) -> list[dict]:
+        """The user's torrents, newest first (up to pages × 100)."""
+        out: list[dict] = []
+        for page in range(1, pages + 1):
+            res = await self._call("GET", "/torrents", params={"limit": PAGE_SIZE, "page": page})
+            if res.status_code == 204 or not res.content:
+                break
+            batch = res.json()
+            out.extend(batch)
+            if len(batch) < PAGE_SIZE:
+                break
+        return out
+
+    async def info(self, torrent_id: str) -> dict:
+        return (await self._call("GET", f"/torrents/info/{torrent_id}")).json()
+
+    async def add_magnet(self, infohash: str) -> str:
+        res = await self._call("POST", "/torrents/addMagnet", data={"magnet": f"magnet:?xt=urn:btih:{infohash}"})
+        return str(res.json()["id"])
+
+    async def select_files(self, torrent_id: str, file_ids: list[int]) -> None:
+        await self._call("POST", f"/torrents/selectFiles/{torrent_id}", data={"files": ",".join(map(str, file_ids))})
+
+    async def delete(self, torrent_id: str) -> None:
+        await self._call("DELETE", f"/torrents/delete/{torrent_id}")
+
+    async def unrestrict(self, link: str) -> dict:
+        return (await self._call("POST", "/unrestrict/link", data={"link": link})).json()
+
+    async def start(
+        self,
+        infohash: str,
+        filename: str | None = None,
+        file_idx: int | None = None,
+        season: int | None = None,
+        episode: int | None = None,
+    ) -> tuple[dict, int | None]:
+        """Add (or reuse) the torrent and select the chosen file.
+        Returns (torrent info, chosen file id)."""
+        infohash = infohash.lower()
+        existing = [t for t in await self.torrents() if str(t.get("hash", "")).lower() == infohash]
+        for t in existing:
+            info = await self.info(str(t["id"]))
+            file = pick_file(info.get("files") or [], filename, file_idx, season, episode)
+            fid = int(file["id"]) if file else None
+            if info.get("status") == "waiting_files_selection" and fid is not None:
+                await self.select_files(str(info["id"]), [fid])
+                return await self.info(str(info["id"])), fid
+            selected = {int(f["id"]) for f in info.get("files") or [] if f.get("selected")}
+            # Already there with our file (or still reading the magnet): follow it.
+            if fid is None or fid in selected or info.get("status") in FAILED_STATUSES:
+                return info, fid
+        torrent_id = await self.add_magnet(infohash)
+        info = await self.info(torrent_id)
+        fid = None
+        # The file list shows up once the magnet is read (usually right away
+        # for known torrents); otherwise the next status check selects it.
+        if info.get("status") == "waiting_files_selection":
+            file = pick_file(info.get("files") or [], filename, file_idx, season, episode)
+            if file:
+                fid = int(file["id"])
+                await self.select_files(torrent_id, [fid])
+                info = await self.info(torrent_id)
+        return info, fid

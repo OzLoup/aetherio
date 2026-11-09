@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AddonRef } from "@/lib/stremio";
-import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt } from "./streams";
+import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt, torrentRef } from "./streams";
 import { shiftVtt, srtToVtt } from "./subtitles";
 
 const torrentio: AddonRef = {
@@ -321,5 +321,25 @@ describe("flag-only languages", () => {
     const flagOnly = mk("[Grupo] Pelicula (1080p)\n🇲🇽", 0);
     const written = mk("Pelicula 1080p Latino\n🇲🇽", 1);
     expect(sortStreams([flagOnly, written], "es-419")[0]).toBe(written);
+  });
+});
+
+describe("torrentRef", () => {
+  const hash = "0123456789ABCDEF0123456789ABCDEF01234567";
+  it("reads Torrentio debrid links (hash, file index, file name)", () => {
+    const url = `https://torrentio.strem.fun/resolve/realdebrid/${"K".repeat(52)}/${hash}/null/3/Movie%20(2017).mkv`;
+    expect(torrentRef({ url })).toEqual({ infohash: hash.toLowerCase(), fileIdx: 3, filename: "Movie (2017).mkv" });
+  });
+  it("prefers the stream's own fields", () => {
+    expect(torrentRef({ infoHash: hash, fileIdx: 1, behaviorHints: { filename: "a.mp4" } })).toEqual({
+      infohash: hash.toLowerCase(),
+      fileIdx: 1,
+      filename: "a.mp4",
+    });
+  });
+  it("finds a hash anywhere in other addons' links", () => {
+    expect(torrentRef({ url: `https://addon.example/rd/abc/${hash.toLowerCase()}/1` })?.infohash).toBe(hash.toLowerCase());
+    expect(torrentRef({ url: `https://x.example/play?magnet=magnet:?xt=urn:btih:${hash}` })?.infohash).toBe(hash.toLowerCase());
+    expect(torrentRef({ url: "https://cdn.example/movie.mp4" })).toBeNull();
   });
 });

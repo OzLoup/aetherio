@@ -1,7 +1,8 @@
-import { Check, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Check, Download, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, getErrorDetail, setToken } from "@/api/client";
+import { connectDebrid, disconnectDebrid, getDebridAccount, type DebridAccount } from "@/api/debrid";
 import { PROFILE_COLORS, type ProfileSettings } from "@/api/types";
 import { APP_NAME } from "@/components/BrandLogo";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
@@ -235,6 +236,8 @@ export default function Settings() {
         </Field>
       </Section>
 
+      <DebridSettings />
+
       <ParentalControl onSaved={() => { setSaved(true); window.setTimeout(() => setSaved(false), 1800); }} />
 
       <Section icon={<KeyRound />} title={t("Cuenta")} description={user?.email}>
@@ -408,5 +411,86 @@ function ParentalControl({ onSaved }: { onSaved: () => void }) {
         }}
       />
     </Section>
+  );
+}
+
+/** Real-Debrid key of the account: lets the app ask for downloads itself
+ * and show their progress (Descargas). Saved encrypted on the server. */
+function DebridSettings() {
+  const [account, setAccount] = useState<DebridAccount | null>(null);
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDebridAccount(true)
+      .then(setAccount)
+      .catch(() => setAccount({ connected: false }));
+  }, []);
+
+  async function connect(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      setAccount(await connectDebrid(key.trim()));
+      setKey("");
+    } catch (err) {
+      setError(getErrorDetail(err) ?? t("Algo salió mal"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    try {
+      await disconnectDebrid();
+      setAccount({ connected: false });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const expires = account?.expiration ? new Date(account.expiration).toLocaleDateString() : null;
+  return (
+    <div id="debrid">
+      <Section
+        icon={<Download />}
+        title={t("Servicio debrid")}
+        description={t("Opcional. Con tu clave de Real-Debrid la app pide las descargas de fuentes que no están listas y te muestra su avance en Descargas.")}
+      >
+        {!account ? (
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        ) : account.connected && account.valid !== false ? (
+          <Field label={t("Real-Debrid")} hint={expires ? t("Premium hasta el {date}", { date: expires }) : undefined}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 text-sm">
+                <Check className="size-4 text-success" />
+                {t("Conectado como {user}", { user: account.username ?? "?" })}
+              </span>
+              <Button variant="outline" size="sm" className="text-destructive" onClick={() => void disconnect()} disabled={busy}>
+                {t("Desconectar")}
+              </Button>
+            </div>
+          </Field>
+        ) : (
+          <Field
+            label={t("Clave de API de Real-Debrid")}
+            hint={account.connected ? t("Tu clave guardada ya no funciona: pega una nueva.") : t("En tu cuenta de Real-Debrid, en la sección API token. Se guarda cifrada.")}
+            htmlFor="s-rd"
+          >
+            <form className="flex gap-2" onSubmit={connect}>
+              <Input id="s-rd" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} />
+              <Button type="submit" variant="outline" disabled={key.trim().length < 20 || busy}>
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {t("Conectar")}
+              </Button>
+            </form>
+          </Field>
+        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </Section>
+    </div>
   );
 }

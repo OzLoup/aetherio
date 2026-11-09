@@ -1,22 +1,24 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { DownloadDialog } from "@/components/debrid/DownloadDialog";
 import { StreamCard } from "@/components/streams/StreamCard";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { useProfiles } from "@/context/ProfileContext";
 import { useAddons } from "@/hooks/useAddons";
 import { useAdjacentEpisodes } from "@/hooks/useNextEpisode";
+import { useTorrentStatus } from "@/hooks/useTorrentStatus";
+import { getDebridAccount } from "@/api/debrid";
 import { languageInfo } from "@/lib/languages";
 import { getVideoProgress, resumePoint, type ProgressContext } from "@/api/progress";
 import { playerPath, progressContextFrom } from "@/lib/routes";
 import { android } from "@/lib/android";
 import { mediaSupport } from "@/lib/browser";
 import { openInVlc, vlcAvailable } from "@/lib/vlc";
-import { gaveShortClip, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
+import { gaveShortClip, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, torrentRef, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
 import { addonsFor, getStreams, type AddonResult, type Stream } from "@/lib/stremio";
@@ -162,6 +164,25 @@ export default function Streams() {
   const readyAlternative = parsed.find(
     (s) => s.cached === true && (s.kind === "direct" || s.kind === "hls") && (!hasMyLanguage || isDubbedFor(s.languages, language)),
   );
+  // Sources the debrid still has to download: their live % in the list.
+  const hashOf = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const s of parsed) {
+      if (s.cached !== false && s.kind !== "torrent") continue;
+      const ref = torrentRef(s.stream);
+      if (ref) out[s.key] = ref.infohash;
+    }
+    return out;
+  }, [parsed]);
+  const [statusBump, setStatusBump] = useState(0);
+  const torrents = useTorrentStatus(Object.values(hashOf), statusBump);
+  // With a Real-Debrid key saved, bare torrents can be downloaded there too.
+  const [debridReady, setDebridReady] = useState(false);
+  useEffect(() => {
+    getDebridAccount()
+      .then((a) => setDebridReady(a.connected && a.valid !== false))
+      .catch(() => setDebridReady(false));
+  }, []);
   const pending = sources.filter((a) => !results.some((r) => r.addon === a));
   const failed = results.filter((r) => r.error);
 
@@ -185,12 +206,13 @@ export default function Streams() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, allAnswered]);
 
-  async function play(s: ParsedStream, opts: { replace?: boolean } = {}) {
+  /** `url`: a direct link to the file (a download finished in the debrid). */
+  async function play(s: ParsedStream, opts: { replace?: boolean; url?: string } = {}) {
     // Picked up on another device or earlier: resume there.
     const saved = forceStart ? null : await getVideoProgress(id).catch(() => null);
     const startAt = resumePoint(saved);
     const state: PlayerState = {
-      stream: s.stream,
+      stream: opts.url ? { ...s.stream, url: opts.url } : s.stream,
       title,
       progress,
       startAt: startAt || undefined,
@@ -210,7 +232,7 @@ export default function Streams() {
   }
 
   function handleSelect(s: ParsedStream) {
-    if ((s.kind === "direct" || s.kind === "hls") && s.cached === false) {
+    if (((s.kind === "direct" || s.kind === "hls") && s.cached === false) || (s.kind === "torrent" && debridReady)) {
       setConfirmUncached(s);
     } else if (s.kind === "youtube") {
       window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(s.stream.ytId!)}`, "_blank", "noreferrer");
@@ -337,6 +359,8 @@ export default function Streams() {
                   key={s.key}
                   s={s}
                   onSelect={handleSelect}
+                  download={hashOf[s.key] ? torrents[hashOf[s.key]] : undefined}
+                  canDownload={debridReady}
                   verified={s.stream.url ? verified[s.stream.url] : undefined}
                   verifying={Boolean(desktop && s.stream.url && probed.current.has(s.stream.url) && !(s.stream.url in verified))}
                 />
@@ -352,33 +376,30 @@ export default function Streams() {
         </>
       )}
 
-      <Dialog open={confirmUncached !== null} onOpenChange={(open) => !open && setConfirmUncached(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("Este stream todavía no está listo")}</DialogTitle>
-            <DialogDescription>
-              {t("Todavía no está en la caché de tu servicio debrid. Si lo eliges, empezará a descargarlo y podrás verlo cuando termine (de minutos a horas). Los marcados con ⚡ Listo empiezan al instante.")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => confirmUncached && start(confirmUncached)}>
-              {t("Pedir descarga")}
-            </Button>
-            {readyAlternative ? (
-              <Button
-                onClick={() => {
-                  setConfirmUncached(null);
-                  play(readyAlternative);
-                }}
-              >
-                {t("Ver uno listo ({info})", { info: [readyAlternative.quality ?? "?", readyAlternative.size].filter(Boolean).join(" · ") })}
-              </Button>
-            ) : (
-              <Button onClick={() => setConfirmUncached(null)}>{t("Elegir otro")}</Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DownloadDialog
+        stream={confirmUncached}
+        videoId={id}
+        context={progress}
+        alreadyThere={Boolean(confirmUncached && hashOf[confirmUncached.key] && torrents[hashOf[confirmUncached.key]])}
+        readyAlternative={readyAlternative}
+        onClose={() => {
+          setConfirmUncached(null);
+          setStatusBump((n) => n + 1);
+        }}
+        onPlay={(url) => {
+          const s = confirmUncached;
+          setConfirmUncached(null);
+          if (s) void play(s, { url });
+        }}
+        onLegacy={(s) => {
+          setConfirmUncached(null);
+          start(s);
+        }}
+        onPlayAlternative={(s) => {
+          setConfirmUncached(null);
+          void play(s);
+        }}
+      />
     </div>
   );
 }

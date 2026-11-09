@@ -24,6 +24,9 @@ class User(Base):
     parental_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Goes up when the password changes: older login tokens stop working.
     token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Real-Debrid API key (Ajustes), encrypted: lets the app ask for downloads
+    # itself and follow them. Per account (one debrid subscription).
+    realdebrid_key: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profiles: Mapped[list["Profile"]] = relationship(
@@ -69,6 +72,7 @@ class Profile(Base):
     progress: Mapped[list["WatchProgress"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
     library: Mapped[list["LibraryItem"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
     ratings: Mapped[list["Rating"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
+    downloads: Mapped[list["DebridDownload"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
     playlists: Mapped[list["ProfilePlaylist"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan", order_by="ProfilePlaylist.position"
     )
@@ -214,3 +218,38 @@ class TmdbId(Base):
     tmdb_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     imdb_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DebridDownload(Base):
+    """A file this profile asked its debrid to download (Descargas). The
+    progress lives in Real-Debrid; this row remembers which torrent/file it
+    is and what title it belongs to, so it can be drawn and played later."""
+
+    __tablename__ = "debrid_downloads"
+    __table_args__ = (UniqueConstraint("profile_id", "torrent_id", name="uq_download_profile_torrent"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="realdebrid")
+    torrent_id: Mapped[str] = mapped_column(String(64))
+    infohash: Mapped[str] = mapped_column(String(40), index=True)
+    # Chosen file (Real-Debrid file id) and the hints to choose it later
+    # when the file list wasn't known yet.
+    file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    filename: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    file_idx: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Title it belongs to (to draw the row and play it from Descargas).
+    type: Mapped[str] = mapped_column(String(30))
+    meta_id: Mapped[str] = mapped_column(String(255))
+    video_id: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(String(500))
+    poster: Mapped[str | None] = mapped_column(Text, nullable=True)
+    season: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    episode_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # The source as the addon described it (name/title/languages; never its URL,
+    # which can carry the debrid key).
+    source: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    profile: Mapped["Profile"] = relationship(back_populates="downloads")

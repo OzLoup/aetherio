@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Compass, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users, Radio } from "lucide-react";
+import { ArrowLeftRight, Compass, Download, History, Home, Loader2, LogOut, Moon, Puzzle, Search, Settings, Sun, Users, Radio } from "lucide-react";
 import { Suspense, useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,10 @@ export function AppLayout() {
                 <DropdownMenuItem onSelect={() => navigate("/history")}>
                   <History />
                   {t("Historial")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate("/downloads")}>
+                  <Download />
+                  {t("Descargas")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => navigate("/settings")}>
                   <Settings />

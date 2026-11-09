@@ -335,6 +335,16 @@ function onFocusIn(e: FocusEvent) {
   if (!refocusing && isTextField(el) && el.dataset.remoteEditing === undefined) lockField(el);
 }
 
+/** Touch or mouse on a field (phones, tablets, emulators): type right away.
+ * The lock is only for the remote passing through. Runs before the focus,
+ * so onFocusIn sees it as "editing" and leaves it unlocked. */
+function onPointerDown(e: PointerEvent) {
+  const el = e.target instanceof Element ? e.target.closest("input, textarea") : null;
+  if (!isTextField(el) || el.disabled) return;
+  el.dataset.remoteEditing = "";
+  unlockField(el);
+}
+
 function onFocusOut(e: FocusEvent) {
   const el = e.target as Element;
   // Focus dropped out of a closing dialog/menu (after its animation): put
@@ -647,6 +657,7 @@ export function installSpatialNavigation() {
   window.addEventListener("keydown", onKeyDownCapture, true);
   window.addEventListener("keydown", onKeyDown);
   document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("pointerdown", onPointerDown, true);
   document.addEventListener("focusin", rememberFocus);
   document.addEventListener("focusout", onFocusOut);
   window.addEventListener("popstate", onPopState);
@@ -659,6 +670,7 @@ export function installSpatialNavigation() {
     document.removeEventListener("focusin", onFocusIn);
   document.removeEventListener("focusin", rememberFocus);
     document.removeEventListener("focusout", onFocusOut);
+    document.removeEventListener("pointerdown", onPointerDown, true);
     delete window.__aetherBack;
   };
 }

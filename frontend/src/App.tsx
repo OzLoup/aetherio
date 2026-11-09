@@ -25,6 +25,7 @@ const Search = lazy(() => import("./pages/Search"));
 const Streams = lazy(() => import("./pages/Streams"));
 const Player = lazy(() => import("./pages/Player"));
 const History = lazy(() => import("./pages/History"));
+const Downloads = lazy(() => import("./pages/Downloads"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Tv = lazy(() => import("./pages/Tv"));
 const Legal = lazy(() => import("./pages/Legal"));
@@ -99,6 +100,7 @@ export default function App() {
                   <Route path="/detail/:type/:id" element={<Detail />} />
                   <Route path="/addons" element={<Addons />} />
                   <Route path="/history" element={<History />} />
+                  <Route path="/downloads" element={<Downloads />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/streams/:type/:id" element={<Streams />} />
                   <Route path="/play/:type/:id" element={<Player />} />

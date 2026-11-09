@@ -407,3 +407,47 @@ export function markShortClip(s: Stream) {
 export function gaveShortClip(s: Stream) {
   return shortClips().includes(clipKey(s));
 }
+
+// --- the torrent behind a debrid source -------------------------------------
+
+export interface TorrentRef {
+  infohash: string;
+  fileIdx?: number;
+  filename?: string;
+}
+
+const HASH_SEGMENT = /^[a-fA-F0-9]{40}$/;
+const VIDEO_FILE = /\.(mkv|mp4|avi|m4v|mov|ts|m2ts|webm|wmv|mpe?g)$/i;
+
+/** Which torrent (and file) a source is, so the app can ask the debrid for
+ * it itself: the stream's own `infoHash`, or a 40-hex segment / btih in its
+ * link (Torrentio, Peerflix, Comet… put it there). */
+export function torrentRef(s: Stream): TorrentRef | null {
+  let infohash = s.infoHash && HASH_SEGMENT.test(s.infoHash) ? s.infoHash : undefined;
+  let fileIdx = typeof s.fileIdx === "number" ? s.fileIdx : undefined;
+  let filename = typeof s.behaviorHints?.filename === "string" ? s.behaviorHints.filename : undefined;
+  if (s.url) {
+    let segments: string[] = [];
+    try {
+      const u = new URL(s.url);
+      segments = u.pathname.split("/").map((p) => {
+        try {
+          return decodeURIComponent(p);
+        } catch {
+          return p;
+        }
+      });
+      const btih = /btih:([a-fA-F0-9]{40})/.exec(decodeURIComponent(u.search));
+      if (!infohash && btih) infohash = btih[1];
+    } catch {
+      segments = [];
+    }
+    const at = segments.findIndex((p) => HASH_SEGMENT.test(p));
+    if (!infohash && at >= 0) infohash = segments[at];
+    // Torrentio: …/{infoHash}/{cachedEntryInfo}/{fileIndex}/{filename}
+    if (at >= 0 && fileIdx === undefined && /^\d+$/.test(segments[at + 2] ?? "")) fileIdx = Number(segments[at + 2]);
+    const last = segments.at(-1) ?? "";
+    if (!filename && VIDEO_FILE.test(last)) filename = last;
+  }
+  return infohash ? { infohash: infohash.toLowerCase(), fileIdx, filename } : null;
+}

@@ -1,5 +1,8 @@
 import { AlertTriangle, BadgeCheck, Captions, ExternalLink, HardDrive, Loader2, Lock, Play, VolumeX, Zap } from "lucide-react";
+import type { TorrentStatus } from "@/api/debrid";
+import { shortStatus, statusLine } from "@/components/debrid/DownloadStatus";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { android } from "@/lib/android";
 import { desktop as macApp } from "@/lib/desktop";
 
@@ -16,17 +19,23 @@ export function StreamCard({
   onSelect,
   verified,
   verifying,
+  download,
+  canDownload,
 }: {
   s: ParsedStream;
   onSelect: (s: ParsedStream) => void;
   /** macOS app: audio languages read from the file itself (null = couldn't). */
   verified?: StreamLang[] | null;
   verifying?: boolean;
+  /** Not cached, but already in the user's debrid: how its download goes. */
+  download?: TorrentStatus;
+  /** A Real-Debrid key is saved: bare torrents can be downloaded there. */
+  canDownload?: boolean;
 }) {
   const real = verified && verified.length ? verified : null;
   const playable = isPlayable(s);
   const opensOutside = s.kind === "external" || s.kind === "youtube";
-  const disabled = s.kind === "torrent";
+  const disabled = s.kind === "torrent" && !canDownload;
   // iPhone/iPad: any playable link can also go to VLC (MKV only plays there).
   const vlc = vlcAvailable() && playable && Boolean(s.stream.url);
 
@@ -49,7 +58,24 @@ export function StreamCard({
               {t("Listo")}
             </span>
           )}
-          {s.cached === false && (
+          {(s.cached === false || s.kind === "torrent") && download && (
+            <span
+              className={cn(
+                "flex w-full flex-col items-center gap-1 text-center text-[11px] font-semibold leading-tight",
+                download.ready ? "text-success" : download.failed ? "text-destructive" : "text-warning",
+              )}
+              title={statusLine(download)}
+            >
+              {shortStatus(download)}
+              {!download.ready && !download.failed && <Progress value={download.progress} className="h-1" indicatorClassName="bg-warning" />}
+            </span>
+          )}
+          {s.kind === "torrent" && canDownload && !download && (
+            <span className="text-center text-[11px] leading-tight text-warning" title={t("Se descarga en tu Real-Debrid")}>
+              {t("Torrent")}
+            </span>
+          )}
+          {s.cached === false && !download && (
             <span className="text-center text-[11px] leading-tight text-warning" title={t("Tu debrid todavía tiene que descargarlo")}>
               {t("No en caché")}
             </span>

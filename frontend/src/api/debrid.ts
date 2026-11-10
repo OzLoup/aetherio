@@ -51,16 +51,22 @@ export interface Download extends TorrentStatus {
 
 let account: Promise<DebridAccount> | null = null;
 
-/** The account's debrid connection (asked once, until it changes). */
+/** The account's debrid connection (asked once, until it changes). Only a
+ * clear answer is kept: after a failure or a Real-Debrid hiccup it's asked
+ * again next time, so one bad moment doesn't stick for the whole session. */
 export function getDebridAccount(fresh = false) {
   if (!account || fresh) {
-    account = api
+    const asking = api
       .get<DebridAccount>("/debrid/account")
-      .then((r) => r.data)
+      .then((r) => {
+        if (r.data.connected && r.data.valid !== true && account === asking) account = null;
+        return r.data;
+      })
       .catch((e) => {
-        account = null;
+        if (account === asking) account = null;
         throw e;
       });
+    account = asking;
   }
   return account;
 }

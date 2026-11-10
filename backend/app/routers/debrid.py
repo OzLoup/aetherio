@@ -85,7 +85,8 @@ async def get_account(user: User = Depends(get_current_user)):
         async with debrid.RealDebrid(user.realdebrid_key) as rd:
             return _account_out(await rd.user())
     except debrid.DebridError as exc:
-        return {"connected": True, "valid": False, "error": str(exc)}
+        # A passing Real-Debrid failure isn't a bad key: the app keeps using it.
+        return {"connected": True, "valid": False if exc.bad_key else None, "error": str(exc)}
 
 
 @router.put("/account")

@@ -112,17 +112,19 @@ export function DownloadDialog({
       });
       setDownload(d);
       setStep("following");
+      // Already downloaded in the account: straight to the video.
+      if (alreadyThere && d.ready) void play(d);
     } catch (e) {
       setError(getErrorDetail(e) ?? t("Algo salió mal"));
       setStep("confirm");
     }
   }
 
-  async function play() {
-    if (!download) return;
+  async function play(d: Download | null = download) {
+    if (!d) return;
     setOpening(true);
     try {
-      const { url } = await playableLink(download.id);
+      const { url } = await playableLink(d.id);
       onPlay(url);
     } catch (e) {
       setError(getErrorDetail(e) ?? t("Algo salió mal"));

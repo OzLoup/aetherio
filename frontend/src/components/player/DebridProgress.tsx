@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/api/client";
-import { getDebridAccount, torrentsStatus, type TorrentStatus } from "@/api/debrid";
+import { api, getErrorDetail } from "@/api/client";
+import {
+  getDebridAccount,
+  getDownload,
+  playableLink,
+  startDownload,
+  torrentsStatus,
+  type Download,
+  type TorrentStatus,
+} from "@/api/debrid";
+import type { ProgressContext } from "@/api/progress";
 import { DownloadStatus } from "@/components/debrid/DownloadStatus";
-import { torrentRef } from "@/lib/streams";
+import { torrentRef, type TorrentRef } from "@/lib/streams";
 import type { Stream } from "@/lib/stremio";
 import { t } from "@/i18n";
 
@@ -28,11 +37,28 @@ function speedLabel(bytesPerSecond: number) {
 }
 
 /** Live progress of the debrid download behind a stream the addon said was
- * ready but gave a "downloading" clip for. With a Real-Debrid key saved, it
- * follows the torrent by its hash (any addon: Comet, Torrentio, Peerflix…);
- * otherwise it reads Torrentio links. Calls `onReady` once the file is
- * downloaded, so the player can start right away. */
-export function DebridProgress({ url, stream, onReady }: { url: string; stream?: Stream; onReady: () => void }) {
+ * ready but gave a "downloading" clip for.
+ * - Real-Debrid key saved + we know the title: the app asks Real-Debrid for
+ *   the torrent itself (reusing it if the addon already added it), follows
+ *   it and hands `onDirect` a direct Real-Debrid link when it's done, so it
+ *   doesn't depend on the addon (Comet keeps giving its clip for a while).
+ * - Key saved only: follows the torrent by its hash; `onReady` when done.
+ * - No key: reads Torrentio links as before. */
+export function DebridProgress({
+  url,
+  stream,
+  videoId,
+  context,
+  onReady,
+  onDirect,
+}: {
+  url: string;
+  stream?: Stream;
+  videoId?: string;
+  context?: ProgressContext;
+  onReady: () => void;
+  onDirect?: (url: string) => void;
+}) {
   const [accountMode, setMode] = useState<"hash" | "url" | null>(null);
   const ref = stream ? torrentRef(stream) : null;
   const hash = ref?.infohash;
@@ -49,9 +75,113 @@ export function DebridProgress({ url, stream, onReady }: { url: string; stream?:
     };
   }, [hash]);
 
+  if (mode === "hash" && ref && stream && videoId && context && onDirect) {
+    return <ByDownload stream={stream} torrent={ref} videoId={videoId} context={context} onDirect={onDirect} />;
+  }
   if (mode === "hash" && hash) return <ByHash hash={hash} onReady={onReady} />;
   if (mode === "url") return <ByUrl url={url} onReady={onReady} />;
   return null;
+}
+
+/** Asks Real-Debrid for it (Descargas), follows it, then a direct link. */
+function ByDownload({
+  stream,
+  torrent,
+  videoId,
+  context,
+  onDirect,
+}: {
+  stream: Stream;
+  torrent: TorrentRef;
+  videoId: string;
+  context: ProgressContext;
+  onDirect: (url: string) => void;
+}) {
+  const [download, setDownload] = useState<Download | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const onDirectRef = useRef(onDirect);
+  useEffect(() => {
+    onDirectRef.current = onDirect;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
+    let id: number | null = null;
+    const finish = async (d: Download) => {
+      try {
+        const { url } = await playableLink(d.id);
+        if (!cancelled && url) onDirectRef.current(url);
+      } catch (e) {
+        if (!cancelled) setError(getErrorDetail(e) ?? t("Algo salió mal"));
+      }
+    };
+    const follow = (d: Download) => {
+      if (cancelled) return;
+      setDownload(d);
+      if (d.ready) return void finish(d);
+      if (d.failed) return;
+      timer = window.setTimeout(async () => {
+        try {
+          const next = await getDownload(id!);
+          setError(null);
+          follow(next);
+        } catch {
+          if (cancelled) return;
+          setError(t("No se pudo consultar a tu debrid. Reintentando…"));
+          follow(d);
+        }
+      }, POLL_MS);
+    };
+    startDownload(torrent, videoId, context, {
+      name: stream.name,
+      title: stream.title,
+      description: stream.description,
+      behaviorHints: stream.behaviorHints,
+    })
+      .then((d) => {
+        id = d.id;
+        setError(null);
+        follow(d);
+      })
+      .catch((e) => !cancelled && setError(getErrorDetail(e) ?? t("Algo salió mal")));
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // Once per stream (and per "Reintentar").
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [torrent.infohash, attempt]);
+
+  return (
+    <div className="flex w-full max-w-sm flex-col gap-2 text-left text-white [&_p]:text-white/80">
+      {download ? (
+        <DownloadStatus status={download} />
+      ) : (
+        !error && (
+          <p className="text-sm" role="status">
+            {t("Pidiendo la descarga a Real-Debrid…")}
+          </p>
+        )
+      )}
+      {download?.ready && !error && <p className="text-sm">{t("¡Listo! Empezando…")}</p>}
+      {error && <p className="text-sm">{error}</p>}
+      {(download?.failed || (error && !download)) && (
+        <button
+          type="button"
+          onClick={() => {
+            setDownload(null);
+            setError(null);
+            setAttempt((n) => n + 1);
+          }}
+          className="self-start rounded-md border border-white/30 px-3 py-1.5 text-sm hover:bg-white/10"
+        >
+          {t("Reintentar")}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** The torrent as it is in the user's Real-Debrid. */

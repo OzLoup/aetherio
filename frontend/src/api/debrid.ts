@@ -86,6 +86,7 @@ export async function startDownload(
     infohash: ref.infohash,
     file_idx: ref.fileIdx ?? null,
     filename: ref.filename ?? null,
+    trackers: ref.trackers ?? [],
     type: ctx.type,
     meta_id: ctx.metaId,
     video_id: videoId,

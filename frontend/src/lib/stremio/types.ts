@@ -142,6 +142,8 @@ export interface Stream {
   ytId?: string;
   infoHash?: string;
   fileIdx?: number;
+  /** Torrent peers: "tracker:<url>" or "dht:<infohash>". */
+  sources?: string[];
   externalUrl?: string;
   name?: string;
   /** Deprecated in favour of `description`, still used by most addons. */

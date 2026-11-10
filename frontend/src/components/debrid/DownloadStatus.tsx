@@ -32,6 +32,9 @@ export function shortStatus(s: TorrentStatus) {
 export function statusLine(s: TorrentStatus) {
   if (s.ready) return t("¡Descargado! Ya puedes verlo.");
   if (s.status === "removed") return t("Esta descarga ya no está en tu cuenta de Real-Debrid.");
+  if (s.status === "dead") return t("Real-Debrid no encontró a nadie compartiendo este torrent. Reintenta más tarde o elige otra fuente.");
+  if (s.status === "magnet_error") return t("Real-Debrid no pudo leer este torrent. Reintenta o elige otra fuente.");
+  if (s.status === "virus") return t("Real-Debrid bloqueó este archivo. Elige otra fuente.");
   if (s.failed) return t("Tu debrid no puede descargar este archivo (torrent muerto o con error). Elige otra fuente.");
   if (s.status === "magnet_conversion") return t("Tu debrid está buscando el torrent…");
   if (WAITING.has(s.status)) return t("En cola en tu debrid…");

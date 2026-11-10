@@ -414,6 +414,8 @@ export interface TorrentRef {
   infohash: string;
   fileIdx?: number;
   filename?: string;
+  /** Trackers the addon gave for this torrent (helps the debrid find peers). */
+  trackers?: string[];
 }
 
 const HASH_SEGMENT = /^[a-fA-F0-9]{40}$/;
@@ -449,5 +451,11 @@ export function torrentRef(s: Stream): TorrentRef | null {
     const last = segments.at(-1) ?? "";
     if (!filename && VIDEO_FILE.test(last)) filename = last;
   }
-  return infohash ? { infohash: infohash.toLowerCase(), fileIdx, filename } : null;
+  const trackers = (Array.isArray(s.sources) ? s.sources : [])
+    .filter((x): x is string => typeof x === "string" && x.startsWith("tracker:"))
+    .map((x) => x.slice("tracker:".length))
+    .slice(0, 30);
+  return infohash
+    ? { infohash: infohash.toLowerCase(), fileIdx, filename, ...(trackers.length ? { trackers } : {}) }
+    : null;
 }

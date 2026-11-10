@@ -156,6 +156,39 @@ def test_magnet_carries_trackers():
     assert m.count("&tr=") == 1 + len(debrid.DEFAULT_TRACKERS)
 
 
+def test_reads_are_retried_once_after_a_hiccup(monkeypatch):
+    monkeypatch.setattr(debrid, "RETRY_DELAY", 0)
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(503, json={"error": "service_unavailable", "error_code": 25})
+        return httpx.Response(200, json={"username": "oz", "type": "premium"})
+
+    async def go():
+        async with debrid.RealDebrid(KEY, transport=httpx.MockTransport(handler)) as rd:
+            return await rd.user()
+
+    assert asyncio.run(go())["username"] == "oz" and len(calls) == 2
+
+
+def test_only_a_rejected_key_counts_as_a_bad_key(monkeypatch):
+    monkeypatch.setattr(debrid, "RETRY_DELAY", 0)
+
+    def go(response):
+        async def run():
+            async with debrid.RealDebrid(KEY, transport=httpx.MockTransport(lambda r: response)) as rd:
+                await rd.user()
+
+        with pytest.raises(debrid.DebridError) as err:
+            asyncio.run(run())
+        return err.value.bad_key
+
+    assert go(httpx.Response(401, json={"error": "bad_token", "error_code": 8})) is True
+    assert go(httpx.Response(503, json={"error": "service_unavailable", "error_code": 25})) is False
+
+
 def test_real_debrid_errors_are_said_in_words():
     def handler(request):
         return httpx.Response(503, json={"error": "too_many_active_downloads", "error_code": 21})

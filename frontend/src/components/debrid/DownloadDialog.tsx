@@ -62,7 +62,9 @@ export function DownloadDialog({
     setError(null);
     setStep("loading");
     let cancelled = false;
+    // One more try before falling back to the old flow (a passing hiccup).
     getDebridAccount()
+      .catch(() => new Promise<void>((r) => window.setTimeout(r, 1500)).then(() => getDebridAccount()))
       .then((a) => {
         if (cancelled) return;
         setAccount(a);

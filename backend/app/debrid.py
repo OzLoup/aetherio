@@ -12,11 +12,16 @@ Real-Debrid's API doesn't allow calls from web pages (no CORS), hence the
 backend in the middle.
 """
 
+import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from urllib.parse import quote
 
 import httpx
+
+log = logging.getLogger(__name__)
+RETRY_DELAY = 1.0
 
 RD_API = "https://api.real-debrid.com/rest/1.0"
 # Torrentio: /resolve/realdebrid/{apiKey}/{infoHash}/{cachedEntryInfo}/{fileIndex}/{name}
@@ -24,7 +29,11 @@ TORRENTIO_RD = re.compile(r"/resolve/realdebrid/([A-Za-z0-9]{20,100})/([a-fA-F0-
 
 
 class DebridError(Exception):
-    pass
+    """`bad_key`: Real-Debrid rejected the key (not a passing failure)."""
+
+    def __init__(self, message: str, bad_key: bool = False) -> None:
+        super().__init__(message)
+        self.bad_key = bad_key
 
 
 @dataclass
@@ -211,12 +220,23 @@ class RealDebrid:
         await self._client.aclose()
 
     async def _call(self, method: str, path: str, **kw) -> httpx.Response:
-        try:
-            res = await self._client.request(method, path, **kw)
-        except httpx.HTTPError as exc:
-            raise DebridError("Real-Debrid no responde") from exc
+        # Real-Debrid has short hiccups (5xx, timeouts): reads are tried once
+        # more before giving up. Writes aren't, so nothing is added twice.
+        tries = 2 if method == "GET" else 1
+        for attempt in range(tries):
+            try:
+                res = await self._client.request(method, path, **kw)
+            except httpx.HTTPError as exc:
+                if attempt + 1 < tries:
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                raise DebridError("Real-Debrid no responde") from exc
+            if res.status_code >= 500 and attempt + 1 < tries:
+                await asyncio.sleep(RETRY_DELAY)
+                continue
+            break
         if res.status_code == 401:
-            raise DebridError("La clave de Real-Debrid no es válida")
+            raise DebridError("La clave de Real-Debrid no es válida", bad_key=True)
         if res.status_code >= 400:
             code, message = None, None
             try:
@@ -224,7 +244,10 @@ class RealDebrid:
                 code, message = body.get("error_code"), body.get("error")
             except ValueError:
                 pass
-            raise DebridError(RD_ERRORS.get(code) or f"Real-Debrid respondió {res.status_code}" + (f" ({message})" if message else ""))
+            text = RD_ERRORS.get(code) or f"Real-Debrid respondió {res.status_code}" + (f" ({message})" if message else "")
+            # Only the path's first part: the rest can be a torrent id.
+            log.warning("Real-Debrid %s %s -> %s %s", method, "/".join(path.split("/")[:3]), res.status_code, message or code)
+            raise DebridError(text, bad_key=code == 8)
         return res
 
     async def user(self) -> dict:

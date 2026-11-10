@@ -117,6 +117,8 @@ class DownloadIn(BaseModel):
     infohash: str = Field(pattern=r"^[A-Fa-f0-9]{40}$")
     file_idx: int | None = Field(default=None, ge=0, le=100_000)
     filename: str | None = Field(default=None, max_length=1000)
+    # The addon's trackers for this torrent (only tracker URLs are used).
+    trackers: list[str] = Field(default_factory=list, max_length=50)
     type: str = Field(min_length=1, max_length=30)
     meta_id: str = Field(min_length=1, max_length=255)
     video_id: str = Field(min_length=1, max_length=255)
@@ -210,11 +212,26 @@ async def start_download(
     infohash = payload.infohash.lower()
     try:
         async with debrid.RealDebrid(key) as rd:
-            info, file_id = await rd.start(infohash, payload.filename, payload.file_idx, payload.season, payload.episode)
+            info, file_id = await rd.start(
+                infohash,
+                payload.filename,
+                payload.file_idx,
+                payload.season,
+                payload.episode,
+                trackers=[t[:500] for t in payload.trackers],
+            )
+            removed = rd.removed
     except debrid.DebridError as exc:
         raise _bad_gateway(exc) from exc
     _list_cache.pop(user.id, None)
     torrent_id = str(info["id"])
+    # The failed torrent was replaced: drop its entry from Descargas.
+    if removed:
+        for old in db.scalars(
+            select(DebridDownload).where(DebridDownload.profile_id == profile.id, DebridDownload.torrent_id.in_(removed))
+        ):
+            db.delete(old)
+        db.flush()
     row = db.scalar(
         select(DebridDownload).where(DebridDownload.profile_id == profile.id, DebridDownload.torrent_id == torrent_id)
     )

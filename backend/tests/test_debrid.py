@@ -86,6 +86,11 @@ def _rd_transport(state):
             assert HASH in request.content.decode()
             state["torrents"].insert(0, {"id": "NEW", "hash": HASH, "status": "waiting_files_selection", "files": [dict(f) for f in FILES], "links": []})
             return httpx.Response(201, json={"id": "NEW"})
+        if path.startswith("/torrents/delete/"):
+            tid = path.rsplit("/", 1)[1]
+            state["torrents"] = [t for t in state["torrents"] if t["id"] != tid]
+            state.setdefault("deleted", []).append(tid)
+            return httpx.Response(204)
         if path.startswith("/torrents/selectFiles/"):
             tid = path.rsplit("/", 1)[1]
             chosen = request.content.decode().split("=", 1)[1]
@@ -128,6 +133,27 @@ def test_start_adds_again_when_the_existing_one_has_another_file():
     state = {"torrents": [{"id": "OLD", "hash": HASH, "status": "downloaded", "files": files, "links": ["L2"]}]}
     info, fid = asyncio.run(_start(state, season=1, episode=2))
     assert info["id"] == "NEW" and fid == 3
+
+
+def test_start_replaces_a_dead_torrent_instead_of_reusing_it():
+    files = [{**f, "selected": 1 if f["id"] == 2 else 0} for f in FILES]
+    state = {"torrents": [{"id": "OLD", "hash": HASH, "status": "dead", "files": files, "links": []}]}
+
+    async def go():
+        async with debrid.RealDebrid(KEY, transport=_rd_transport(state)) as rd:
+            info, fid = await rd.start(HASH, season=1, episode=1)
+            return info, fid, rd.removed
+
+    info, fid, removed = asyncio.run(go())
+    assert removed == ["OLD"] and state["deleted"] == ["OLD"]
+    assert info["id"] == "NEW" and fid == 2 and info["status"] == "downloading"
+
+
+def test_magnet_carries_trackers():
+    m = debrid.magnet(HASH, ["udp://tracker.example.org:1337/announce", "javascript:alert(1)", "dht:" + HASH])
+    assert m.startswith(f"magnet:?xt=urn:btih:{HASH}&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce")
+    assert "javascript" not in m and "dht" not in m
+    assert m.count("&tr=") == 1 + len(debrid.DEFAULT_TRACKERS)
 
 
 def test_real_debrid_errors_are_said_in_words():

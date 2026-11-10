@@ -1,4 +1,4 @@
-import { Download as DownloadIcon, ListVideo, Loader2, Play, Trash2 } from "lucide-react";
+import { Download as DownloadIcon, ListVideo, Loader2, Play, RotateCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getErrorDetail } from "@/api/client";
@@ -228,8 +228,19 @@ export function DownloadDialog({
                     {t("Cancelar descarga")}
                   </Button>
                 )}
-                {download.failed && readyAlternative ? (
-                  <Button onClick={() => onPlayAlternative(readyAlternative)}>{alternativeLabel}</Button>
+                {download.failed ? (
+                  <>
+                    {/* Asks for it again: the failed torrent is deleted and re-added. */}
+                    <Button variant={readyAlternative ? "outline" : "default"} onClick={() => void begin()} autoFocus={!readyAlternative}>
+                      <RotateCw />
+                      {t("Reintentar")}
+                    </Button>
+                    {readyAlternative && (
+                      <Button onClick={() => onPlayAlternative(readyAlternative)} autoFocus>
+                        {alternativeLabel}
+                      </Button>
+                    )}
+                  </>
                 ) : download.ready ? (
                   <Button onClick={() => void play()} disabled={opening} autoFocus>
                     {opening ? <Loader2 className="animate-spin" /> : <Play />}

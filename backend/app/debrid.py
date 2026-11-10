@@ -14,6 +14,7 @@ backend in the middle.
 
 import re
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 
@@ -102,6 +103,32 @@ RD_ERRORS = {
 }
 
 
+# Open public trackers added to every magnet, as most torrent clients do: a
+# bare infohash leaves the debrid to find peers through DHT only, and it
+# often gives up on torrents that do have seeds.
+DEFAULT_TRACKERS = (
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://open.demonii.com:1337/announce",
+)
+TRACKER_RE = re.compile(r"^(udp|https?|wss?)://[^\s/?#]+(?::\d+)?(/[^\s]*)?$", re.I)
+MAX_TRACKERS = 30
+
+
+def magnet(infohash: str, trackers: list[str] | tuple[str, ...] = ()) -> str:
+    """magnet: link with the addon's trackers (only plain tracker URLs) plus ours."""
+    seen: list[str] = []
+    for tr in [*trackers, *DEFAULT_TRACKERS]:
+        tr = str(tr).strip()
+        if TRACKER_RE.match(tr) and tr not in seen:
+            seen.append(tr)
+    return f"magnet:?xt=urn:btih:{infohash}" + "".join(
+        f"&tr={quote(tr, safe='')}" for tr in seen[:MAX_TRACKERS]
+    )
+
+
 def video_files(files: list[dict]) -> list[dict]:
     vids = [f for f in files if str(f.get("path", "")).lower().endswith(VIDEO_EXT)]
     return vids or list(files)
@@ -174,6 +201,8 @@ class RealDebrid:
         self._client = httpx.AsyncClient(
             base_url=RD_API, timeout=15, headers={"Authorization": f"Bearer {key}"}, transport=transport
         )
+        # Failed torrents start() deleted from the account.
+        self.removed: list[str] = []
 
     async def __aenter__(self) -> "RealDebrid":
         return self
@@ -217,8 +246,8 @@ class RealDebrid:
     async def info(self, torrent_id: str) -> dict:
         return (await self._call("GET", f"/torrents/info/{torrent_id}")).json()
 
-    async def add_magnet(self, infohash: str) -> str:
-        res = await self._call("POST", "/torrents/addMagnet", data={"magnet": f"magnet:?xt=urn:btih:{infohash}"})
+    async def add_magnet(self, infohash: str, trackers: list[str] | tuple[str, ...] = ()) -> str:
+        res = await self._call("POST", "/torrents/addMagnet", data={"magnet": magnet(infohash, trackers)})
         return str(res.json()["id"])
 
     async def select_files(self, torrent_id: str, file_ids: list[int]) -> None:
@@ -237,12 +266,19 @@ class RealDebrid:
         file_idx: int | None = None,
         season: int | None = None,
         episode: int | None = None,
+        trackers: list[str] | tuple[str, ...] = (),
     ) -> tuple[dict, int | None]:
         """Add (or reuse) the torrent and select the chosen file.
-        Returns (torrent info, chosen file id)."""
+        Returns (torrent info, chosen file id). Torrents of this hash that had
+        failed are deleted and asked for again (ids in `self.removed`): reusing
+        them would only show the same error forever."""
         infohash = infohash.lower()
         existing = [t for t in await self.torrents() if str(t.get("hash", "")).lower() == infohash]
         for t in existing:
+            if t.get("status") in FAILED_STATUSES:
+                await self.delete(str(t["id"]))
+                self.removed.append(str(t["id"]))
+                continue
             info = await self.info(str(t["id"]))
             file = pick_file(info.get("files") or [], filename, file_idx, season, episode)
             fid = int(file["id"]) if file else None
@@ -251,9 +287,9 @@ class RealDebrid:
                 return await self.info(str(info["id"])), fid
             selected = {int(f["id"]) for f in info.get("files") or [] if f.get("selected")}
             # Already there with our file (or still reading the magnet): follow it.
-            if fid is None or fid in selected or info.get("status") in FAILED_STATUSES:
+            if fid is None or fid in selected:
                 return info, fid
-        torrent_id = await self.add_magnet(infohash)
+        torrent_id = await self.add_magnet(infohash, trackers)
         info = await self.info(torrent_id)
         fid = None
         # The file list shows up once the magnet is read (usually right away

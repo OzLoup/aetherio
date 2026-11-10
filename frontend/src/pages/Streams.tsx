@@ -240,9 +240,16 @@ export default function Streams() {
     return Boolean(live && !live.ready);
   }
 
+  /** A debrid source whose torrent is already in the account (ready or
+   * not): the app plays it with Real-Debrid's own link, so it doesn't
+   * depend on the addon (Comet may keep giving its "downloading" clip). */
+  function inAccount(s: ParsedStream) {
+    return Boolean(debridReady && isDebridStream(s.stream) && hashOf[s.key] && torrents[hashOf[s.key]]);
+  }
+
   function handleSelect(s: ParsedStream) {
     if (
-      ((s.kind === "direct" || s.kind === "hls") && (s.cached === false || stillDownloading(s))) ||
+      ((s.kind === "direct" || s.kind === "hls") && (s.cached === false || stillDownloading(s) || inAccount(s))) ||
       (s.kind === "torrent" && debridReady)
     ) {
       setConfirmUncached(s);

@@ -246,7 +246,15 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
           </p>
           {/* Debrid download progress; reopens the player when it's done. */}
           {isDebridStream(stream) && stream.url && (
-            <DebridProgress url={stream.url} stream={stream} onReady={() => launch(subsRef.current, (startAt ?? 0) * 1000)} />
+            <DebridProgress
+              url={stream.url}
+              stream={stream}
+              videoId={id}
+              context={state.progress}
+              onDirect={(direct) =>
+                navigate(playerPath(type, id), { replace: true, state: { ...state, stream: { ...stream, url: direct } } })
+              }
+              onReady={() => launch(subsRef.current, (startAt ?? 0) * 1000)} />
           )}
           <Button size="lg" autoFocus onClick={() => navigate(-1)}>
             <ListVideo />

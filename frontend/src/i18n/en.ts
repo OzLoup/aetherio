@@ -629,6 +629,7 @@ export const en: Record<string, string> = {
   "Servicio debrid": "Debrid service",
   "Terminando…": "Finishing…",
   "Tu clave de Real-Debrid ya no funciona. Revísala en Ajustes.": "Your Real-Debrid key no longer works. Check it in Settings.",
+  "Esta fuente no dice qué torrent es, así que no podemos pedirle la descarga a tu Real-Debrid ni mostrar el avance. \"Pedir descarga\" abre el enlace del addon.": "This source doesn't say which torrent it is, so we can't ask your Real-Debrid for it or show its progress. \"Pedir descarga\" opens the addon's link.",
   "Tu clave guardada ya no funciona: pega una nueva.": "Your saved key no longer works: paste a new one.",
   "Tu debrid está buscando el torrent…": "Your debrid is looking for the torrent…",
   "Tu debrid no puede descargar este archivo (torrent muerto o con error). Elige otra fuente.": "Your debrid can't download this file (dead or broken torrent). Pick another source.",

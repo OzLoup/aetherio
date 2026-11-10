@@ -171,6 +171,10 @@ export function DownloadDialog({
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-warning">
                 {t("Tu clave de Real-Debrid ya no funciona. Revísala en Ajustes.")}
               </p>
+            ) : !ref ? (
+              <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                {t("Esta fuente no dice qué torrent es, así que no podemos pedirle la descarga a tu Real-Debrid ni mostrar el avance. \"Pedir descarga\" abre el enlace del addon.")}
+              </p>
             ) : null}
             <DialogFooter>
               <Button variant="outline" onClick={() => stream && onLegacy(stream)}>

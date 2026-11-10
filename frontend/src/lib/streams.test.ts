@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AddonRef } from "@/lib/stremio";
-import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, qualityOptions, sizeMb, sortStreams, toAlt, torrentRef } from "./streams";
+import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, markShortClip, languageOptions, languageScore, lighterOption, overMaxQuality, parseStream, placeholderMax, qualityOptions, sizeMb, sortStreams, toAlt, torrentRef } from "./streams";
 import { shiftVtt, srtToVtt } from "./subtitles";
 
 const torrentio: AddonRef = {
@@ -341,5 +341,23 @@ describe("torrentRef", () => {
     expect(torrentRef({ url: `https://addon.example/rd/abc/${hash.toLowerCase()}/1` })?.infohash).toBe(hash.toLowerCase());
     expect(torrentRef({ url: `https://x.example/play?magnet=magnet:?xt=urn:btih:${hash}` })?.infohash).toBe(hash.toLowerCase());
     expect(torrentRef({ url: "https://cdn.example/movie.mp4" })).toBeNull();
+  });
+  it("reads Comet links, or its bingeGroup when the link hides the hash", () => {
+    const h = hash.toLowerCase();
+    expect(torrentRef({ url: `https://comet.example/Y2Zn/playback/${h}/0/n/n/n?torrent_name=x` })?.infohash).toBe(h);
+    expect(torrentRef({ url: `https://comet.example/p?data=${h}.mkv` })?.infohash).toBe(h);
+    expect(
+      torrentRef({ url: "https://comet.example/Y2Zn/playback/eyJoIjoxfQ", behaviorHints: { bingeGroup: `comet|realdebrid|${h}` } })
+        ?.infohash,
+    ).toBe(h);
+    // A longer hex run isn't a hash.
+    expect(torrentRef({ url: `https://x.example/${"a".repeat(64)}` })).toBeNull();
+  });
+});
+
+describe("placeholderMax", () => {
+  it("gives debrid sources room for ElfHosted's 2-minute notice", () => {
+    expect(placeholderMax({ name: "[RD⬇️] Comet unknown", url: "https://comet.example/playback/x" })).toBeGreaterThan(120);
+    expect(placeholderMax({ name: "Some site", url: "https://cdn.example/a.mp4" })).toBe(90);
   });
 });

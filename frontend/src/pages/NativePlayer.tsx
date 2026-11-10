@@ -11,7 +11,7 @@ import { onRemoteBack } from "@/lib/spatialNav";
 import { DebridProgress } from "@/components/player/DebridProgress";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath } from "@/lib/routes";
-import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
+import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, placeholderMax, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
 import { chooseSubtitles, fetchSubtitleVtt, getSubsPref, getSubtitleSync, NO_SYNC, retimeVtt, saveSubtitleSync } from "@/lib/subtitles";
 import type { PlayerState } from "./Streams";
@@ -19,8 +19,6 @@ import { t } from "@/i18n";
 
 // Subtitles shouldn't hold the video back for long.
 const SUBTITLES_WAIT_MS = 6000;
-// Torrentio's "downloading" placeholder is ~30 s; no movie/episode is this short.
-const PLACEHOLDER_MAX_S = 90;
 // The installed app moves subtitles itself (0.8.0+): send them untouched.
 const nativeSync = android?.supports("subsync") ?? false;
 
@@ -88,7 +86,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
     if (!progress || durationMs <= 0) return;
     const position = positionMs / 1000;
     const duration = durationMs / 1000;
-    if (duration < PLACEHOLDER_MAX_S || position < 5) return;
+    if (duration < placeholderMax(stream) || position < 5) return;
     if (!force && Math.abs(position - lastSaved.current) < 30) return;
     lastSaved.current = position;
     await saveProgress(id, progress, position, duration).catch(() => {});
@@ -184,7 +182,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
       if (e.type === "progress") {
         void save(e.positionMs, e.durationMs);
       } else if (e.type === "closed") {
-        if (e.durationMs > 0 && e.durationMs / 1000 < PLACEHOLDER_MAX_S) {
+        if (e.durationMs > 0 && e.durationMs / 1000 < placeholderMax(stream)) {
           markShortClip(stream);
           setStatus("placeholder");
           return;

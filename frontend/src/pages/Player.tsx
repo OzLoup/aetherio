@@ -1357,7 +1357,7 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
               {t("No estaba en su caché, así que ya pidió descargarlo. Puede tardar desde unos minutos hasta horas si tiene pocas fuentes. Puedes volver más tarde, o elegir ahora un stream marcado como ⚡ Listo, que empieza al instante.")}
             </p>
             {/* Real progress when the source allows it; plays by itself when done. */}
-            <DebridProgress url={url} onReady={retry} />
+            <DebridProgress url={url} stream={stream} onReady={retry} />
             <div className="flex flex-wrap justify-center gap-2">
               <Button onClick={() => navigate(-1)}>{t("Elegir uno listo")}</Button>
               <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={retry}>

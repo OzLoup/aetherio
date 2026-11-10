@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
+import { getDebridAccount, torrentsStatus, type TorrentStatus } from "@/api/debrid";
+import { DownloadStatus } from "@/components/debrid/DownloadStatus";
+import { torrentRef } from "@/lib/streams";
+import type { Stream } from "@/lib/stremio";
 import { t } from "@/i18n";
 
 const POLL_MS = 5000;
@@ -23,10 +27,86 @@ function speedLabel(bytesPerSecond: number) {
   return mb >= 1 ? `${mb.toFixed(1)} MB/s` : `${Math.round(bytesPerSecond / 1000)} KB/s`;
 }
 
-/** Live progress of the debrid download behind `url` (Torrentio + Real-
- * Debrid for now). Calls `onReady` once the file is downloaded, so the
- * player can start right away. Shows nothing for unsupported sources. */
-export function DebridProgress({ url, onReady }: { url: string; onReady: () => void }) {
+/** Live progress of the debrid download behind a stream the addon said was
+ * ready but gave a "downloading" clip for. With a Real-Debrid key saved, it
+ * follows the torrent by its hash (any addon: Comet, Torrentio, Peerflix…);
+ * otherwise it reads Torrentio links. Calls `onReady` once the file is
+ * downloaded, so the player can start right away. */
+export function DebridProgress({ url, stream, onReady }: { url: string; stream?: Stream; onReady: () => void }) {
+  const [accountMode, setMode] = useState<"hash" | "url" | null>(null);
+  const ref = stream ? torrentRef(stream) : null;
+  const hash = ref?.infohash;
+  const mode = hash ? accountMode : "url";
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!hash) return;
+    getDebridAccount()
+      .then((a) => !cancelled && setMode(a.connected && a.valid !== false ? "hash" : "url"))
+      .catch(() => !cancelled && setMode("url"));
+    return () => {
+      cancelled = true;
+    };
+  }, [hash]);
+
+  if (mode === "hash" && hash) return <ByHash hash={hash} onReady={onReady} />;
+  if (mode === "url") return <ByUrl url={url} onReady={onReady} />;
+  return null;
+}
+
+/** The torrent as it is in the user's Real-Debrid. */
+function ByHash({ hash, onReady }: { hash: string; onReady: () => void }) {
+  const [status, setStatus] = useState<TorrentStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
+    let done = false;
+    const poll = async () => {
+      try {
+        const { items } = await torrentsStatus([hash]);
+        if (cancelled) return;
+        const s = items[hash] ?? null;
+        setStatus(s);
+        setError(null);
+        if (s?.ready && !done) {
+          done = true;
+          onReadyRef.current();
+          return;
+        }
+      } catch {
+        if (!cancelled) setError(t("No se pudo consultar a tu debrid. Reintentando…"));
+      }
+      if (!cancelled) timer = window.setTimeout(poll, POLL_MS);
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [hash]);
+
+  return (
+    <div className="flex w-full max-w-sm flex-col gap-2 text-left text-white [&_p]:text-white/80">
+      {status ? (
+        <DownloadStatus status={status} />
+      ) : (
+        <p className="text-sm text-white/80" role="status">
+          {error ?? t("Esperando a que tu debrid empiece la descarga…")}
+        </p>
+      )}
+      {status && error && <p className="text-sm text-white/80">{error}</p>}
+    </div>
+  );
+}
+
+/** Legacy: progress read from a Torrentio link (no key saved). */
+function ByUrl({ url, onReady }: { url: string; onReady: () => void }) {
   const [data, setData] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);

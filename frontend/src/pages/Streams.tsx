@@ -18,7 +18,7 @@ import { playerPath, progressContextFrom } from "@/lib/routes";
 import { android } from "@/lib/android";
 import { mediaSupport } from "@/lib/browser";
 import { openInVlc, vlcAvailable } from "@/lib/vlc";
-import { gaveShortClip, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, torrentRef, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
+import { gaveShortClip, isDebridStream, isDubbedFor, isLocked, isMultiAudio, isPlayable, isReady, parseStream, sortStreams, toAlt, torrentRef, type AltStream, type ParsedStream, type Quality } from "@/lib/streams";
 import type { StreamLang } from "@/lib/languages";
 import { desktop, probeMedia, verifiedLanguages } from "@/lib/desktop";
 import { addonsFor, getStreams, type AddonResult, type Stream } from "@/lib/stremio";
@@ -165,10 +165,12 @@ export default function Streams() {
     (s) => s.cached === true && (s.kind === "direct" || s.kind === "hls") && (!hasMyLanguage || isDubbedFor(s.languages, language)),
   );
   // Sources the debrid still has to download: their live % in the list.
+  // Debrid ones the addon calls ready too: Comet guesses its ⚡ from other
+  // users, so one may still be downloading in this account.
   const hashOf = useMemo(() => {
     const out: Record<string, string> = {};
     for (const s of parsed) {
-      if (s.cached !== false && s.kind !== "torrent") continue;
+      if (s.cached !== false && s.kind !== "torrent" && !isDebridStream(s.stream)) continue;
       const ref = torrentRef(s.stream);
       if (ref) out[s.key] = ref.infohash;
     }
@@ -200,6 +202,7 @@ export default function Streams() {
         // would just show a notice instead of the episode.
         !isLocked(s.stream) &&
         !gaveShortClip(s.stream) &&
+        !stillDownloading(s) &&
         (!hasMyLanguage || isDubbedFor(s.languages, language)),
     );
     if (best) void play(best, { replace: true });
@@ -231,8 +234,17 @@ export default function Streams() {
     else play(s);
   }
 
+  /** In the account but not finished (whatever the addon says). */
+  function stillDownloading(s: ParsedStream) {
+    const live = hashOf[s.key] ? torrents[hashOf[s.key]] : undefined;
+    return Boolean(live && !live.ready);
+  }
+
   function handleSelect(s: ParsedStream) {
-    if (((s.kind === "direct" || s.kind === "hls") && s.cached === false) || (s.kind === "torrent" && debridReady)) {
+    if (
+      ((s.kind === "direct" || s.kind === "hls") && (s.cached === false || stillDownloading(s))) ||
+      (s.kind === "torrent" && debridReady)
+    ) {
       setConfirmUncached(s);
     } else if (s.kind === "youtube") {
       window.open(`https://www.youtube.com/watch?v=${encodeURIComponent(s.stream.ytId!)}`, "_blank", "noreferrer");

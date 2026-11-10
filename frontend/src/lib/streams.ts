@@ -375,6 +375,13 @@ export function isLocked(s: Stream) {
   );
 }
 
+/** Seconds under which a video is an addon's notice, not the title:
+ * Torrentio's "downloading" clip is 30 s, Comet's 8 s, ElfHosted's Comet
+ * 2 min. Debrid sources get more room (no movie or episode is that short). */
+export function placeholderMax(s: Stream) {
+  return isDebridStream(s) ? 150 : 90;
+}
+
 const SHORT_KEY = "aetherio.shortClips";
 
 /** Same source across episodes: addon label + first line of its details. */
@@ -419,6 +426,8 @@ export interface TorrentRef {
 }
 
 const HASH_SEGMENT = /^[a-fA-F0-9]{40}$/;
+// A 40-hex run on its own (not part of a longer hex string).
+const ANY_HASH = /(?<![a-fA-F0-9])([a-fA-F0-9]{40})(?![a-fA-F0-9])/;
 const VIDEO_FILE = /\.(mkv|mp4|avi|m4v|mov|ts|m2ts|webm|wmv|mpe?g)$/i;
 
 /** Which torrent (and file) a source is, so the app can ask the debrid for
@@ -450,6 +459,20 @@ export function torrentRef(s: Stream): TorrentRef | null {
     if (at >= 0 && fileIdx === undefined && /^\d+$/.test(segments[at + 2] ?? "")) fileIdx = Number(segments[at + 2]);
     const last = segments.at(-1) ?? "";
     if (!filename && VIDEO_FILE.test(last)) filename = last;
+    // Anywhere else in the link (hosted instances may move it around).
+    if (!infohash) {
+      let text = s.url;
+      try {
+        text = decodeURIComponent(s.url);
+      } catch {
+        // keep it as is
+      }
+      infohash = ANY_HASH.exec(text)?.[1];
+    }
+  }
+  // Comet always says it in bingeGroup: "comet|realdebrid|{infoHash}".
+  if (!infohash && typeof s.behaviorHints?.bingeGroup === "string") {
+    infohash = ANY_HASH.exec(s.behaviorHints.bingeGroup)?.[1];
   }
   const trackers = (Array.isArray(s.sources) ? s.sources : [])
     .filter((x): x is string => typeof x === "string" && x.startsWith("tracker:"))

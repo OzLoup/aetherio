@@ -18,7 +18,7 @@ import { mediaSupport } from "@/lib/browser";
 import { audioTrackLabel, embeddedSubtitleUrl, isTrackInLanguage, subtitleTrackLabel } from "@/lib/desktop";
 import { languageInfo, streamLangLabel, subtitleLabel } from "@/lib/languages";
 import { playerPath, streamsPath } from "@/lib/routes";
-import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, lighterOption, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
+import { isDebridStream, isDubbedFor, isMultiAudio, languageOptions, markShortClip, lighterOption, placeholderMax, qualityOptions, type AltStream, type AudioChoice } from "@/lib/streams";
 import { getSubtitles, type Extra, type Subtitle } from "@/lib/stremio";
 import { chooseSubtitles, fetchSubtitleVtt, FPS_SCALES, getSubsPref, getSubtitleSync, NO_SYNC, retimeVtt, saveSubtitleSync, setSubsPref, type SubtitleSync } from "@/lib/subtitles";
 import { android } from "@/lib/android";
@@ -506,9 +506,10 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
       }
     };
     const onMeta = () => {
-      // No movie or episode is under 90 s; Torrentio's placeholder is 30 s.
+      // No movie or episode is this short; Torrentio's placeholder is 30 s,
+      // Comet's 8 s, ElfHosted's Comet 2 min (debrid sources only).
       // (Not for Real-Debrid live transcodes, whose duration can look odd.)
-      if (!allowShort.current && !deskRef.current.active && Number.isFinite(video.duration) && video.duration > 0 && video.duration < 90) {
+      if (!allowShort.current && !deskRef.current.active && Number.isFinite(video.duration) && video.duration > 0 && video.duration < placeholderMax(stream)) {
         video.pause();
         markShortClip(stream);
         setDownloading(true);

@@ -108,7 +108,7 @@ RD_ERRORS = {
     29: "Real-Debrid rechazó el archivo (demasiado grande)",
     30: "Real-Debrid no pudo leer este torrent",
     34: "Demasiadas peticiones a Real-Debrid. Espera un momento.",
-    35: "Real-Debrid bloqueó este archivo",
+    35: "Real-Debrid bloqueó este torrent por derechos de autor y no lo descarga para nadie. Elige otra fuente.",
 }
 
 

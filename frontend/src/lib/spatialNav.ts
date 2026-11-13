@@ -448,8 +448,11 @@ function closeOpenCombobox(): boolean {
 
 function onKeyDownCapture(e: KeyboardEvent) {
   const active = document.activeElement;
-  // Back/Escape with suggestions open: close them (the box handles it).
-  if (e.key === "Escape" && e.isTrusted && document.querySelector("[role=combobox][aria-expanded=true]")) {
+  if (enterSuggestions(e, active)) return;
+  // Back/Escape with suggestions open: close them (the box handles it), but
+  // not while typing: that Escape only stops the typing (below).
+  const typing = isTextField(active) && isEditing(active) && active.dataset.remoteEditing !== undefined;
+  if (e.key === "Escape" && e.isTrusted && !typing && document.querySelector("[role=combobox][aria-expanded=true]")) {
     e.preventDefault();
     e.stopPropagation();
     closeOpenCombobox();
@@ -553,22 +556,55 @@ export function onRemoteBack(handler: () => boolean) {
   };
 }
 
+/** ↓ on the search box with suggestions open: into the list. Done here, not
+ * left to the general search, so it works even when the keyboard was closed
+ * with Back and the field is still in typing mode. */
+function enterSuggestions(e: KeyboardEvent, active: Element | null): boolean {
+  if (e.key !== "ArrowDown" || !(active instanceof HTMLElement) || active.getAttribute("role") !== "combobox") return false;
+  if (active.getAttribute("aria-expanded") !== "true") return false;
+  const first = active.closest("[class~=relative]")?.querySelector<HTMLElement>("[role=listbox] button");
+  if (!first) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  focusEl(first, e.repeat);
+  return true;
+}
+
+// What Back does on pages that follow their title (see lib/backNav.ts),
+// once nothing is open on them.
+let pageBack: (() => void) | null = null;
+
+/** Take the remote's Back for the page while mounted; returns the release. */
+export function setPageBack(handler: () => void) {
+  pageBack = handler;
+  return () => {
+    if (pageBack === handler) pageBack = null;
+  };
+}
+
 function closeLayer(): boolean {
-  if (closeOpenCombobox()) return true;
-  for (const handler of backHandlers) if (handler()) return true;
-  const active = document.activeElement;
-  if (isTextField(active) && isEditing(active) && active.dataset.remoteEditing !== undefined) {
-    delete active.dataset.remoteEditing;
-    lockField(active);
+  const field = document.activeElement;
+  // Typing (keyboard open): the first Back only stops typing; the
+  // suggestions stay so ↓ can go to them. Back again closes them.
+  if (isTextField(field) && isEditing(field) && field.dataset.remoteEditing !== undefined) {
+    delete field.dataset.remoteEditing;
+    lockField(field);
     return true;
   }
+  if (closeOpenCombobox()) return true;
+  for (const handler of backHandlers) if (handler()) return true;
   const layer = document.querySelector("[role=dialog][data-state=open], [role=alertdialog][data-state=open], [role=menu][data-state=open]");
   if (layer) {
     const target = document.activeElement ?? document.body;
     target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
     return true;
   }
-  return backToTop();
+  if (backToTop()) return true;
+  if (pageBack) {
+    pageBack();
+    return true;
+  }
+  return false;
 }
 
 /** Back deep down a page (like TV apps): first back to the top, where the

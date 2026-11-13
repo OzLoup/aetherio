@@ -653,4 +653,5 @@ export const en: Record<string, string> = {
   "Real-Debrid no pudo leer este torrent": "Real-Debrid couldn't read this torrent",
   "Demasiadas peticiones a Real-Debrid. Espera un momento.": "Too many requests to Real-Debrid. Wait a moment.",
   "Real-Debrid bloqueó este archivo": "Real-Debrid blocked this file",
+  "Real-Debrid bloqueó este torrent por derechos de autor y no lo descarga para nadie. Elige otra fuente.": "Real-Debrid blocked this torrent for copyright reasons and won't download it for anyone. Pick another source.",
 };

@@ -1,6 +1,7 @@
 import { ArrowLeft, Check, CheckCheck, Clapperboard, Eye, EyeOff, Loader2, Play, RotateCcw, Star, Video as VideoIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { useLeaveDetail } from "@/lib/backNav";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { resumePoint } from "@/api/progress";
@@ -33,7 +34,7 @@ import { t } from "@/i18n";
 export default function Detail() {
   const { type = "", id = "" } = useParams();
   const { active, loading: addonsLoading } = useAddons();
-  const navigate = useNavigate();
+  const leave = useLeaveDetail();
   const [state, setState] = useState<{ key: string; meta: MetaDetail | null; source?: string } | null>(null);
   const key = `${type}|${id}`;
 
@@ -64,7 +65,7 @@ export default function Detail() {
         <p className="max-w-sm text-sm text-muted-foreground">
           {t("Ninguno de tus addons activos tiene información para él. Revisa que tengas un addon de metadatos (como Cinemeta) activo.")}
         </p>
-        <Button variant="outline" onClick={() => navigate(-1)}>
+        <Button variant="outline" onClick={leave}>
           <ArrowLeft />
           {t("Volver")}
         </Button>
@@ -72,7 +73,7 @@ export default function Detail() {
     );
   }
 
-  return <DetailView meta={state.meta} source={state.source} onBack={() => navigate(-1)} />;
+  return <DetailView meta={state.meta} source={state.source} onBack={leave} />;
 }
 
 function DetailView({ meta, source, onBack }: { meta: MetaDetail; source?: string; onBack: () => void }) {

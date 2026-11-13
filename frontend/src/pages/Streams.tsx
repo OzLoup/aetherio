@@ -1,6 +1,7 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLeaveFlow } from "@/lib/backNav";
 import { DownloadDialog } from "@/components/debrid/DownloadDialog";
 import { StreamCard } from "@/components/streams/StreamCard";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -60,6 +61,7 @@ export default function Streams() {
   // "?auto=1": "Siguiente episodio" in the player, start the best ready source.
   const [auto, setAuto] = useState(params.get("auto") === "1");
   const navigate = useNavigate();
+  const leave = useLeaveFlow();
   const { active, loading: addonsLoading } = useAddons();
   const { current } = useProfiles();
   const language = current?.language ?? "es-419";
@@ -279,7 +281,7 @@ export default function Streams() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <Button variant="ghost" size="sm" className="w-fit" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="sm" className="w-fit" onClick={leave}>
           <ArrowLeft />
           {t("Volver")}
         </Button>

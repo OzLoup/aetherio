@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowLeft, Check, Gauge, Languages, ListVideo, Loader2, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLeaveFlow } from "@/lib/backNav";
 import { saveProgress } from "@/api/progress";
 import { Button } from "@/components/ui/button";
 import { useProfiles } from "@/context/ProfileContext";
@@ -46,6 +47,7 @@ function choiceLabel(lang: AudioChoice) {
  * page waits behind it and saves the progress it reports. */
 export function NativePlayer({ type, id, state }: { type: string; id: string; state: PlayerState }) {
   const navigate = useNavigate();
+  const leave = useLeaveFlow();
   const { active } = useAddons();
   const { current } = useProfiles();
   const [status, setStatus] = useState<"preparing" | "playing" | "closed" | "error" | "placeholder" | "versions">("preparing");
@@ -187,12 +189,12 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
           setStatus("placeholder");
           return;
         }
-        void save(e.positionMs, e.durationMs, true).finally(() => navigate(-1));
+        void save(e.positionMs, e.durationMs, true).finally(leave);
         setStatus("closed");
       } else if (e.type === "next") {
         const next = nextRef.current;
         setStatus("closed");
-        void save(e.positionMs, e.durationMs, true).finally(() => (next ? navigate(next.href, { replace: true }) : navigate(-1)));
+        void save(e.positionMs, e.durationMs, true).finally(() => (next ? navigate(next.href, { replace: true }) : leave()));
       } else if (e.type === "versions") {
         void save(e.positionMs, e.durationMs, true);
         setStatus("versions");
@@ -218,7 +220,7 @@ export function NativePlayer({ type, id, state }: { type: string; id: string; st
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-black p-6 text-center text-white">
       <button
-        onClick={() => navigate(-1)}
+        onClick={leave}
         className="absolute left-4 top-4 flex items-center gap-2 rounded-full px-3 py-2 text-sm text-white/80 hover:bg-white/10 focus-visible:bg-white/15 focus-visible:outline-none"
       >
         <ArrowLeft className="size-5" />

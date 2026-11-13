@@ -570,6 +570,18 @@ function enterSuggestions(e: KeyboardEvent, active: Element | null): boolean {
   return true;
 }
 
+// What Back does on pages that follow their title (see lib/backNav.ts),
+// once nothing is open on them.
+let pageBack: (() => void) | null = null;
+
+/** Take the remote's Back for the page while mounted; returns the release. */
+export function setPageBack(handler: () => void) {
+  pageBack = handler;
+  return () => {
+    if (pageBack === handler) pageBack = null;
+  };
+}
+
 function closeLayer(): boolean {
   const field = document.activeElement;
   // Typing (keyboard open): the first Back only stops typing; the
@@ -587,7 +599,12 @@ function closeLayer(): boolean {
     target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
     return true;
   }
-  return backToTop();
+  if (backToTop()) return true;
+  if (pageBack) {
+    pageBack();
+    return true;
+  }
+  return false;
 }
 
 /** Back deep down a page (like TV apps): first back to the top, where the

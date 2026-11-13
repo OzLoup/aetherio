@@ -8,6 +8,7 @@ import { ProfileProvider, useProfiles } from "./context/ProfileContext";
 import { I18nProvider } from "./i18n";
 import { ThemeProvider } from "./context/ThemeContext";
 import { setAdultAllowed } from "@/lib/stremio";
+import { useTrackNavigation } from "@/lib/backNav";
 import { AddonsProvider } from "./hooks/useAddons";
 import { LibraryProvider } from "./hooks/useLibrary";
 import { RatingsProvider } from "./hooks/useRatings";
@@ -76,12 +77,18 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function NavTracker() {
+  useTrackNavigation();
+  return null;
+}
+
 export default function App() {
   return (
     // Animations follow the OS "reduce motion" setting.
     <MotionConfig reducedMotion="user">
     <ThemeProvider>
       <Router>
+        <NavTracker />
         <AuthProvider>
           <ProfileProvider>
             <ProfileLanguage>

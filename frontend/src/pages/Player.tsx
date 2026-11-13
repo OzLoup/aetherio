@@ -1,6 +1,7 @@
 import { AlertTriangle, Airplay, ArrowLeft, Cast, Check, Copy, Download, Gauge, Languages, ListVideo, Loader2, SkipForward, Maximize, Minimize, Play, RotateCw, Subtitles, VolumeX, Wifi, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLeaveFlow } from "@/lib/backNav";
 import { CastDevicePicker, CastHelp, CastingOverlay } from "@/components/player/CastPanels";
 import { BarButton, ControlBar } from "@/components/player/ControlBar";
 import { DebridProgress } from "@/components/player/DebridProgress";
@@ -71,6 +72,7 @@ export default function Player() {
 
 function PlayerView({ type, id, state }: { type: string; id: string; state: PlayerState }) {
   const navigate = useNavigate();
+  const leave = useLeaveFlow();
   const { active } = useAddons();
   const { current } = useProfiles();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -727,12 +729,12 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
         // Like VLC: G = subtitles earlier, H = later.
         nudgeSyncRef.current(e.key === "g" ? -0.25 : 0.25);
       } else if (e.key === "Backspace" || e.key === "BrowserBack") {
-        navigate(-1);
+        leave();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate, poke, toggleFullscreen]);
+  }, [navigate, leave, poke, toggleFullscreen]);
 
   function playShortAnyway() {
     allowShort.current = true;
@@ -828,7 +830,7 @@ function PlayerView({ type, id, state }: { type: string; id: string; state: Play
           variant="ghost"
           size="icon"
           className="pointer-events-auto text-white hover:bg-white/15"
-          onClick={() => navigate(-1)}
+          onClick={leave}
           aria-label={t("Volver")}
         >
           <ArrowLeft />

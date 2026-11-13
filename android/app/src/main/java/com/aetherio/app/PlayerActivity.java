@@ -301,6 +301,7 @@ public class PlayerActivity extends Activity {
 
             @Override
             public void onPlayerError(@NonNull PlaybackException error) {
+                if (skipBadData(error)) return;
                 fail(error.getErrorCodeName() + (error.getMessage() != null ? ": " + error.getMessage() : ""));
             }
         });
@@ -318,6 +319,30 @@ public class PlayerActivity extends Activity {
         player.setPlayWhenReady(true);
         handler.postDelayed(tick, PROGRESS_EVERY_MS);
         if (hasNext) handler.postDelayed(endWatch, 1000);
+    }
+
+    /** A damaged audio/video packet (common in old XviD/AC3 rips) makes the
+     * decoder fail and, left alone, ends the playback: the spinner or the
+     * error screen, and every seek works for a few seconds until the next bad
+     * packet. Carry on a moment further instead, giving up only when it
+     * keeps failing. */
+    private static final int MAX_DECODE_SKIPS = 40;
+    private static final long SKIP_PAST_BAD_DATA_MS = 1500;
+    private int decodeSkips;
+    private long lastDecodeSkipAt = -1;
+
+    private boolean skipBadData(PlaybackException error) {
+        if (player == null || error.errorCode != PlaybackException.ERROR_CODE_DECODING_FAILED) return false;
+        long at = player.getCurrentPosition();
+        // Well after the last one: it was a one-off, start counting again.
+        if (lastDecodeSkipAt >= 0 && at - lastDecodeSkipAt > 60_000) decodeSkips = 0;
+        if (decodeSkips >= MAX_DECODE_SKIPS) return false;
+        decodeSkips++;
+        lastDecodeSkipAt = at;
+        player.seekTo(at + SKIP_PAST_BAD_DATA_MS);
+        player.prepare();
+        player.setPlayWhenReady(true);
+        return true;
     }
 
     // --- Downloaded subtitles: drawing and timing ---------------------------

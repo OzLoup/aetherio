@@ -32,7 +32,11 @@ function HeaderSearch() {
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
-  const [q, setQ] = useState(location.pathname === "/search" ? (params.get("q") ?? "") : "");
+  const searchQuery = location.pathname === "/search" ? (params.get("q") ?? "") : "";
+  const [q, setQ] = useState(searchQuery);
+  // Changing page (a suggestion, a title, the menu) empties the box: the text
+  // belongs to the search that was made, not to whatever page comes next.
+  useEffect(() => setQ(searchQuery), [location.pathname, searchQuery]);
 
   return (
     <>

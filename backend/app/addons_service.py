@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import debrid_addons
 from app.adult import is_adult_manifest
 from app.config import settings
 from app.crypto import url_hash
@@ -57,12 +58,22 @@ def install_defaults(db: Session, profile: Profile) -> None:
             db.commit()
 
 
+def keyed_url(profile: Profile, url: str, manifest: dict | None) -> tuple[str, bool]:
+    """Torrentio/Comet take the account's Real-Debrid key in their URL, so
+    nobody needs their configure page. (url, whether the key was put in)."""
+    key = profile.user.realdebrid_key
+    addon_kind = debrid_addons.kind(url, manifest)
+    if not key or not addon_kind:
+        return url, False
+    return debrid_addons.with_key(url, addon_kind, key), True
+
+
 def install(db: Session, profile: Profile, raw_url: str, client_manifest: dict | None = None) -> ProfileAddon:
-    url = normalize_manifest_url(raw_url)
+    url, keyed = keyed_url(profile, normalize_manifest_url(raw_url), client_manifest)
     if find_by_url(db, profile, url):
         raise AddonError("Ese addon ya está instalado")
     manifest, raw = resolve_manifest(url, client_manifest)
-    if manifest.behaviorHints.configurationRequired:
+    if manifest.behaviorHints.configurationRequired and not keyed:
         raise AddonError(
             "Este addon necesita configurarse antes de instalarse. Ábrelo en su página de "
             "configuración y copia la URL que te da."
@@ -101,3 +112,28 @@ def copy_addons(db: Session, source: Profile, target: Profile) -> None:
                 show_catalogs=addon.show_catalogs,
             )
         )
+
+
+def apply_debrid_key(db: Session, user, key: str | None) -> int:
+    """Set (or remove, with None) the account's Real-Debrid key in every
+    Torrentio/Comet installed on its profiles. Returns how many changed.
+    The cached manifest is kept: only the name and debrid catalogs (hidden
+    anyway) differ, and Torrentio refuses requests from servers."""
+    changed = 0
+    for profile in user.profiles:
+        taken = {addon.url_hash for addon in profile.addons}
+        for addon in profile.addons:
+            addon_kind = debrid_addons.kind(addon.transport_url, addon.manifest)
+            if not addon_kind:
+                continue
+            new_url = debrid_addons.with_key(addon.transport_url, addon_kind, key)
+            new_hash = url_hash(new_url)
+            if new_url == addon.transport_url or new_hash in taken:
+                continue  # already right, or would duplicate another install
+            taken.discard(addon.url_hash)
+            taken.add(new_hash)
+            addon.transport_url = new_url
+            addon.url_hash = new_hash
+            changed += 1
+    db.commit()
+    return changed

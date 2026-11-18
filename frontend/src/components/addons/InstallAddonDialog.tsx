@@ -70,7 +70,7 @@ export function InstallAddonDialog({ open, onOpenChange, initialUrl, preview, in
   }
 
   const { current } = useProfiles();
-  const needsConfig = result?.manifest.behaviorHints?.configurationRequired;
+  const needsConfig = result?.manifest.behaviorHints?.configurationRequired && !result.uses_debrid_key;
   // +18 addons install only on profiles that allow adult content.
   const adultBlocked = Boolean(result?.adult && !current?.adult_content);
 
@@ -142,6 +142,9 @@ export function InstallAddonDialog({ open, onOpenChange, initialUrl, preview, in
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                 {t("Este addon es para adultos (+18). Actívalo en Ajustes → Control parental de este perfil para instalarlo aquí.")}
               </p>
+            )}
+            {result.uses_debrid_key && (
+              <p className="text-sm text-muted-foreground">{t("Usará la clave de Real-Debrid de tu cuenta.")}</p>
             )}
             {result.already_installed && <p className="text-sm text-muted-foreground">{t("Ya tienes este addon instalado.")}</p>}
           </div>

@@ -2,6 +2,7 @@ import { Check, Download, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, getErrorDetail, setToken } from "@/api/client";
+import { useAddons } from "@/hooks/useAddons";
 import { connectDebrid, disconnectDebrid, getDebridAccount, type DebridAccount } from "@/api/debrid";
 import { PROFILE_COLORS, type ProfileSettings } from "@/api/types";
 import { APP_NAME } from "@/components/BrandLogo";
@@ -417,7 +418,9 @@ function ParentalControl({ onSaved }: { onSaved: () => void }) {
 /** Real-Debrid key of the account: lets the app ask for downloads itself
  * and show their progress (Descargas). Saved encrypted on the server. */
 function DebridSettings() {
+  const { reload: reloadAddons } = useAddons();
   const [account, setAccount] = useState<DebridAccount | null>(null);
+  const [updated, setUpdated] = useState<number | null>(null);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -433,8 +436,12 @@ function DebridSettings() {
     setBusy(true);
     setError(null);
     try {
-      setAccount(await connectDebrid(key.trim()));
+      const next = await connectDebrid(key.trim());
+      setAccount(next);
       setKey("");
+      setUpdated(next.addons_updated ?? 0);
+      // Their URLs changed on the server: streams must use the new ones.
+      void reloadAddons();
     } catch (err) {
       setError(getErrorDetail(err) ?? t("Algo salió mal"));
     } finally {
@@ -447,6 +454,8 @@ function DebridSettings() {
     try {
       await disconnectDebrid();
       setAccount({ connected: false });
+      setUpdated(null);
+      void reloadAddons();
     } finally {
       setBusy(false);
     }
@@ -458,7 +467,7 @@ function DebridSettings() {
       <Section
         icon={<Download />}
         title={t("Servicio debrid")}
-        description={t("Opcional. Con tu clave de Real-Debrid la app pide las descargas de fuentes que no están listas y te muestra su avance en Descargas.")}
+        description={t("Opcional. Con tu clave de Real-Debrid la app pide las descargas de fuentes que no están listas y te muestra su avance en Descargas. Los addons que aceptan la clave en su dirección la reciben solos, en todos tus perfiles: no hace falta configurarla en cada uno.")}
       >
         {!account ? (
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -488,6 +497,9 @@ function DebridSettings() {
               </Button>
             </form>
           </Field>
+        )}
+        {updated !== null && updated > 0 && (
+          <p className="text-sm text-muted-foreground">{t("Clave aplicada a {n} addon(s) instalados.", { n: updated })}</p>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </Section>

@@ -66,6 +66,8 @@ export interface AddonPreview {
   transport_url: string;
   manifest: Manifest;
   already_installed: boolean;
+  /** The account's Real-Debrid key goes into its URL (no configure page needed). */
+  uses_debrid_key?: boolean;
   adult?: boolean;
 }
 

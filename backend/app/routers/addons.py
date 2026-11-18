@@ -39,7 +39,7 @@ def list_addons(profile: Profile = Depends(get_current_profile), db: Session = D
 @router.post("/preview", response_model=AddonPreviewOut)
 def preview_addon(payload: AddonUrlIn, profile: Profile = Depends(get_current_profile), db: Session = Depends(get_db)):
     try:
-        url = normalize_manifest_url(payload.url)
+        url, keyed = addons_service.keyed_url(profile, normalize_manifest_url(payload.url), payload.manifest)
         _, raw = resolve_manifest(url, payload.manifest)
     except AddonError as exc:
         raise _bad_request(exc) from exc
@@ -47,6 +47,7 @@ def preview_addon(payload: AddonUrlIn, profile: Profile = Depends(get_current_pr
         transport_url=url,
         manifest=raw,
         adult=is_adult_manifest(raw),
+        uses_debrid_key=keyed,
         already_installed=addons_service.find_by_url(db, profile, url) is not None,
     )
 

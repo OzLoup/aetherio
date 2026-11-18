@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import debrid
+from app import addons_service, debrid
 from app.auth import get_current_profile, get_current_user
 from app.database import get_db
 from app.models import DebridDownload, Profile, User
@@ -101,13 +101,15 @@ async def set_account(payload: AccountIn, user: User = Depends(get_current_user)
     user.realdebrid_key = payload.key
     db.commit()
     _list_cache.pop(user.id, None)
-    return _account_out(info)
+    return {**_account_out(info), "addons_updated": addons_service.apply_debrid_key(db, user, payload.key)}
 
 
 @router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Also takes the key out of Torrentio/Comet: removing it means removing it."""
     user.realdebrid_key = None
     db.commit()
+    addons_service.apply_debrid_key(db, user, None)
     _list_cache.pop(user.id, None)
 
 

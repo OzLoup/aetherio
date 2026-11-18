@@ -9,6 +9,8 @@ export interface DebridAccount {
   premium?: boolean;
   expiration?: string;
   error?: string;
+  /** After saving the key: installed addons that now carry it. */
+  addons_updated?: number;
 }
 
 /** Live state of a torrent in Real-Debrid. */

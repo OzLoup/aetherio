@@ -154,6 +154,8 @@ class AddonPreviewOut(BaseModel):
     already_installed: bool
     # +18 addon: installable only on profiles that allow adult content.
     adult: bool = False
+    # Gets the account's Real-Debrid key in its URL (app/debrid_addons.py).
+    uses_debrid_key: bool = False
 
 
 class AddonOut(BaseModel):

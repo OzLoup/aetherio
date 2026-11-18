@@ -9,6 +9,8 @@ export interface DebridAccount {
   premium?: boolean;
   expiration?: string;
   error?: string;
+  /** "code": connected once with a code (renews itself); "key": pasted. */
+  method?: "code" | "key";
   /** After saving the key: installed addons that now carry it. */
   addons_updated?: number;
 }
@@ -76,6 +78,28 @@ export function getDebridAccount(fresh = false) {
 export async function connectDebrid(key: string) {
   const { data } = await api.put<DebridAccount>("/debrid/account", { key });
   account = Promise.resolve(data);
+  return data;
+}
+
+/** A code to approve at real-debrid.com/device (connect once, no key). */
+export interface DebridCode {
+  device_code: string;
+  user_code: string;
+  verification_url: string;
+  direct_verification_url?: string;
+  interval: number;
+  expires_in: number;
+}
+
+export async function startDebridConnect() {
+  const { data } = await api.post<DebridCode>("/debrid/connect");
+  return data;
+}
+
+/** `connected: false` until the user approves the code. */
+export async function pollDebridConnect(deviceCode: string) {
+  const { data } = await api.post<DebridAccount>("/debrid/connect/poll", { device_code: deviceCode });
+  if (data.connected) account = Promise.resolve(data);
   return data;
 }
 

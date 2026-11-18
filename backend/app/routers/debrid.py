@@ -9,11 +9,12 @@ remembers which torrent/file belongs to which title.
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import addons_service, debrid
+from app import addons_service, debrid, debrid_auth
 from app.auth import get_current_profile, get_current_user
 from app.database import get_db
 from app.models import DebridDownload, Profile, User
@@ -66,9 +67,11 @@ class AccountIn(BaseModel):
     key: str = Field(min_length=20, max_length=200, pattern=r"^[A-Za-z0-9]+$")
 
 
-def _account_out(info: dict) -> dict:
+def _account_out(info: dict, user: User) -> dict:
     return {
         "connected": True,
+        # "code": connected once with a code (renews itself); "key": pasted.
+        "method": "code" if debrid_auth.connected_with_code(user) else "key",
         "valid": True,
         "username": info.get("username"),
         "premium": info.get("type") == "premium",
@@ -77,13 +80,14 @@ def _account_out(info: dict) -> dict:
 
 
 @router.get("/account")
-async def get_account(user: User = Depends(get_current_user)):
+async def get_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not user.realdebrid_key:
         return {"connected": False}
     _limit(user)
+    await run_in_threadpool(debrid_auth.ensure_fresh, db, user)
     try:
         async with debrid.RealDebrid(user.realdebrid_key) as rd:
-            return _account_out(await rd.user())
+            return _account_out(await rd.user(), user)
     except debrid.DebridError as exc:
         # A passing Real-Debrid failure isn't a bad key: the app keeps using it.
         return {"connected": True, "valid": False if exc.bad_key else None, "error": str(exc)}
@@ -98,16 +102,53 @@ async def set_account(payload: AccountIn, user: User = Depends(get_current_user)
             info = await rd.user()
     except debrid.DebridError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    debrid_auth.forget(user)  # a pasted key replaces a code connection
     user.realdebrid_key = payload.key
     db.commit()
     _list_cache.pop(user.id, None)
-    return {**_account_out(info), "addons_updated": addons_service.apply_debrid_key(db, user, payload.key)}
+    return {**_account_out(info, user), "addons_updated": addons_service.apply_debrid_key(db, user, payload.key)}
+
+
+class PollIn(BaseModel):
+    device_code: str = Field(min_length=10, max_length=200, pattern=r"^[A-Za-z0-9]+$")
+
+
+@router.post("/connect")
+def connect_start(user: User = Depends(get_current_user)):
+    """Connect once with a code: the app shows `user_code` and the user
+    approves it at `verification_url`; then poll."""
+    _limit(user)
+    try:
+        return debrid_auth.start()
+    except debrid_auth.ConnectError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/connect/poll")
+async def connect_poll(payload: PollIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """{"connected": false} until approved; then the account, and the token
+    already set in Torrentio/Comet."""
+    try:
+        auth = await run_in_threadpool(debrid_auth.poll, payload.device_code)
+    except debrid_auth.ConnectError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if auth is None:
+        return {"connected": False}
+    debrid_auth.save(db, user, auth)
+    _list_cache.pop(user.id, None)
+    updated = addons_service.apply_debrid_key(db, user, user.realdebrid_key)
+    try:
+        async with debrid.RealDebrid(user.realdebrid_key) as rd:
+            info = await rd.user()
+    except debrid.DebridError:
+        info = {}
+    return {**_account_out(info, user), "addons_updated": updated}
 
 
 @router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Also takes the key out of Torrentio/Comet: removing it means removing it."""
-    user.realdebrid_key = None
+    debrid_auth.forget(user)
     db.commit()
     addons_service.apply_debrid_key(db, user, None)
     _list_cache.pop(user.id, None)

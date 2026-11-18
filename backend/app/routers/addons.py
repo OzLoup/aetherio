@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import addons_service
+from app import addons_service, debrid_auth
 from app.adult import is_adult_manifest
 from app.auth import get_current_profile
 from app.database import get_db
@@ -29,6 +29,9 @@ def _get_owned(db: Session, profile: Profile, addon_id: int) -> ProfileAddon:
 
 @router.get("", response_model=list[AddonOut])
 def list_addons(profile: Profile = Depends(get_current_profile), db: Session = Depends(get_db)):
+    # Opening the app renews a code-connected Real-Debrid token when it's
+    # close to expiring, so Torrentio/Comet URLs always carry a live one.
+    debrid_auth.ensure_fresh(db, profile.user)
     q = select(ProfileAddon).where(ProfileAddon.profile_id == profile.id)
     # Adult addons only show up on profiles that allow them.
     if not profile.adult_content:

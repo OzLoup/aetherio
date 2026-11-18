@@ -27,6 +27,9 @@ class User(Base):
     # Real-Debrid API key (Ajustes), encrypted: lets the app ask for downloads
     # itself and follow them. Per account (one debrid subscription).
     realdebrid_key: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
+    # Connected with a code (app/debrid_auth.py): JSON with what renews the
+    # token held in realdebrid_key. None when the key was pasted.
+    realdebrid_oauth: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     profiles: Mapped[list["Profile"]] = relationship(

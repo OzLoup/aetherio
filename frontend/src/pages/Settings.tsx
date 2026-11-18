@@ -1,9 +1,9 @@
 import { Check, Download, Gauge, Globe, KeyRound, ShieldCheck, Loader2, LogOut, Moon, Palette, Subtitles, Sun, User as UserIcon } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, getErrorDetail, setToken } from "@/api/client";
 import { useAddons } from "@/hooks/useAddons";
-import { connectDebrid, disconnectDebrid, getDebridAccount, type DebridAccount } from "@/api/debrid";
+import { connectDebrid, disconnectDebrid, getDebridAccount, pollDebridConnect, startDebridConnect, type DebridAccount, type DebridCode } from "@/api/debrid";
 import { PROFILE_COLORS, type ProfileSettings } from "@/api/types";
 import { APP_NAME } from "@/components/BrandLogo";
 import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
@@ -415,6 +415,92 @@ function ParentalControl({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+/** Connect Real-Debrid once: show a code, the user approves it at
+ * real-debrid.com/device (on any device), and the server keeps a token that
+ * renews itself. Polls at the interval Real-Debrid asks for. */
+function CodeConnect({ onConnected }: { onConnected: (account: DebridAccount) => void }) {
+  const [code, setCode] = useState<DebridCode | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The parent's callback changes every render; polling shouldn't restart.
+  const onConnectedRef = useRef(onConnected);
+  useEffect(() => {
+    onConnectedRef.current = onConnected;
+  });
+
+  useEffect(() => {
+    if (!code) return;
+    let stopped = false;
+    const until = Date.now() + code.expires_in * 1000;
+    const timer = window.setInterval(async () => {
+      if (Date.now() > until) {
+        window.clearInterval(timer);
+        setCode(null);
+        setError(t("El código venció. Pide uno nuevo."));
+        return;
+      }
+      try {
+        const result = await pollDebridConnect(code.device_code);
+        if (!stopped && result.connected) {
+          window.clearInterval(timer);
+          onConnectedRef.current(result);
+        }
+      } catch {
+        // A passing failure: try again on the next tick.
+      }
+    }, Math.max(code.interval, 3) * 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [code]);
+
+  async function begin() {
+    setBusy(true);
+    setError(null);
+    try {
+      setCode(await startDebridConnect());
+    } catch (err) {
+      setError(getErrorDetail(err) ?? t("Algo salió mal"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!code) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Button className="self-start" onClick={() => void begin()} disabled={busy}>
+          {busy ? <Loader2 className="animate-spin" /> : <KeyRound />}
+          {t("Conectar con Real-Debrid")}
+        </Button>
+        <p className="text-xs text-muted-foreground">{t("Una sola vez: te damos un código para aprobar en la página de Real-Debrid, desde este u otro dispositivo.")}</p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+    );
+  }
+  const host = code.verification_url.replace(/^https?:\/\//, "");
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+      <p className="text-sm">
+        {t("Abre")}{" "}
+        <a href={code.direct_verification_url ?? code.verification_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline-offset-4 hover:underline">
+          {host}
+        </a>{" "}
+        {t("con tu sesión de Real-Debrid y escribe este código:")}
+      </p>
+      <p className="select-all text-center font-mono text-3xl font-bold tracking-[0.3em]">{code.user_code}</p>
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        {t("Esperando la aprobación…")}
+      </p>
+      <Button variant="outline" size="sm" className="self-start" onClick={() => setCode(null)}>
+        {t("Cancelar")}
+      </Button>
+    </div>
+  );
+}
+
 /** Real-Debrid key of the account: lets the app ask for downloads itself
  * and show their progress (Descargas). Saved encrypted on the server. */
 function DebridSettings() {
@@ -431,17 +517,20 @@ function DebridSettings() {
       .catch(() => setAccount({ connected: false }));
   }, []);
 
+  function connected(next: DebridAccount) {
+    setAccount(next);
+    setKey("");
+    setUpdated(next.addons_updated ?? 0);
+    // Their URLs changed on the server: streams must use the new ones.
+    void reloadAddons();
+  }
+
   async function connect(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const next = await connectDebrid(key.trim());
-      setAccount(next);
-      setKey("");
-      setUpdated(next.addons_updated ?? 0);
-      // Their URLs changed on the server: streams must use the new ones.
-      void reloadAddons();
+      connected(await connectDebrid(key.trim()));
     } catch (err) {
       setError(getErrorDetail(err) ?? t("Algo salió mal"));
     } finally {
@@ -472,7 +561,15 @@ function DebridSettings() {
         {!account ? (
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
         ) : account.connected && account.valid !== false ? (
-          <Field label={t("Real-Debrid")} hint={expires ? t("Premium hasta el {date}", { date: expires }) : undefined}>
+          <Field
+            label={t("Real-Debrid")}
+            hint={[
+              expires ? t("Premium hasta el {date}", { date: expires }) : null,
+              account.method === "code" ? t("La conexión se renueva sola.") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined}
+          >
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex items-center gap-1.5 text-sm">
                 <Check className="size-4 text-success" />
@@ -484,19 +581,24 @@ function DebridSettings() {
             </div>
           </Field>
         ) : (
-          <Field
-            label={t("Clave de API de Real-Debrid")}
-            hint={account.connected ? t("Tu clave guardada ya no funciona: pega una nueva.") : t("En tu cuenta de Real-Debrid, en la sección API token. Se guarda cifrada.")}
-            htmlFor="s-rd"
-          >
-            <form className="flex gap-2" onSubmit={connect}>
-              <Input id="s-rd" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} />
-              <Button type="submit" variant="outline" disabled={key.trim().length < 20 || busy}>
-                {busy ? <Loader2 className="animate-spin" /> : null}
-                {t("Conectar")}
-              </Button>
-            </form>
-          </Field>
+          <div className="flex flex-col gap-4">
+            {account.connected && <p className="text-sm text-destructive">{t("La conexión con Real-Debrid ya no funciona: vuelve a conectar.")}</p>}
+            <CodeConnect onConnected={connected} />
+            <details className="text-sm">
+              <summary className="cursor-pointer rounded text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {t("Prefiero pegar mi clave de API")}
+              </summary>
+              <Field label={t("Clave de API de Real-Debrid")} hint={t("En tu cuenta de Real-Debrid, en la sección API token. Se guarda cifrada.")} htmlFor="s-rd">
+                <form className="flex gap-2" onSubmit={connect}>
+                  <Input id="s-rd" type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" spellCheck={false} />
+                  <Button type="submit" variant="outline" disabled={key.trim().length < 20 || busy}>
+                    {busy ? <Loader2 className="animate-spin" /> : null}
+                    {t("Conectar")}
+                  </Button>
+                </form>
+              </Field>
+            </details>
+          </div>
         )}
         {updated !== null && updated > 0 && (
           <p className="text-sm text-muted-foreground">{t("Clave aplicada a {n} addon(s) instalados.", { n: updated })}</p>
